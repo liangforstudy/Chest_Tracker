@@ -118,7 +118,14 @@ public final class DebugCommand {
                     ctx.getSource().sendFeedback(Text.literal("Undo: restored " + n + " containers from the trash"));
                     return n;
                 }))
-                .then(literal("trash").executes(ctx -> {
+                .then(literal("trash").then(literal("restoreall").executes(ctx -> {
+                    MemoryBank bank = banks.bank();
+                    if (bank == null) return fail(ctx.getSource(), "No bank open");
+                    List<ContainerRecord> trashed = bank.allRecords().filter(ContainerRecord::isTrashed).toList();
+                    for (ContainerRecord r : trashed) Trash.restore(bank, r);
+                    ctx.getSource().sendFeedback(Text.literal("Restored " + trashed.size() + " containers from the trash"));
+                    return trashed.size();
+                })).executes(ctx -> {
                     MemoryBank bank = banks.bank();
                     if (bank == null) return fail(ctx.getSource(), "No bank open");
                     List<ContainerRecord> trashed = bank.allRecords().filter(ContainerRecord::isTrashed).toList();
@@ -138,8 +145,7 @@ public final class DebugCommand {
                     for (ContainerRecord r : records) ctx.getSource().sendFeedback(Text.literal(describe(r)));
                     return records.size();
                 }))
-                .then(literal("search").then(argument("text", StringArgumentType.greedyString())
-                        .executes(ctx -> search(ctx.getSource(), banks, StringArgumentType.getString(ctx, "text")))))
+                .then(searchNode(banks, "search"))
                 .then(literal("save").executes(ctx -> {
                     banks.saveNow();
                     ctx.getSource().sendFeedback(Text.literal("Saved"));
@@ -148,8 +154,7 @@ public final class DebugCommand {
 
         // Short alias. Client commands are handled before anything is sent, so a server /search
         // can't receive it by accident; another client mod's /search would clash, though.
-        dispatcher.register(literal("search").then(argument("text", StringArgumentType.greedyString())
-                .executes(ctx -> search(ctx.getSource(), banks, StringArgumentType.getString(ctx, "text")))));
+        dispatcher.register(searchNode(banks, "search"));
     }
 
     private static String describe(ContainerRecord r) {
@@ -160,7 +165,7 @@ public final class DebugCommand {
                 ? r.items.stream().map(DebugCommand::stackSummary).collect(Collectors.joining(", "))
                 : "never opened";
         String place = r instanceof EntityRecord e ? "home chunk " + e.homeChunkX + "," + e.homeChunkZ
-                : r instanceof BlockRecord b && b.global ? "everywhere"
+                : r instanceof BlockRecord b && b.global ? "ender chest"
                 : "at " + ((BlockRecord) r).pos.toShortString()
                         + (((BlockRecord) r).otherPositions.isEmpty() ? "" : " (double)");
         boolean reappeared = r instanceof EntityRecord e && e.reappeared;
@@ -171,17 +176,31 @@ public final class DebugCommand {
                         + (r.isTrashed() ? " (in trash " + age(r.trashedAt) + ")" : ""));
     }
 
-    /** Also registered as plain /search. Results are nearest first. */
-    private static int search(FabricClientCommandSource source, BankManager banks, String text) {
+    /**
+     * Also registered as plain /search. Results are nearest first. {@code radius} > 0 limits it to
+     * containers within that many blocks in this dimension (/search nearby); an empty text then
+     * lists those containers instead of items.
+     */
+    private static int search(FabricClientCommandSource source, BankManager banks, String text, int radius) {
         MemoryBank bank = banks.bank();
         if (bank == null) return fail(source, "No bank open");
-        String query = text.toLowerCase(java.util.Locale.ROOT);
+        String query = text.trim().toLowerCase(java.util.Locale.ROOT);
         if (query.startsWith("@")) query = query.substring(1);
         var player = MinecraftClient.getInstance().player;
+        var world = MinecraftClient.getInstance().world;
+        String dimension = world == null ? "" : world.getRegistryKey().getValue().toString();
         int hits = 0;
         List<ContainerRecord> records = bank.allRecords().filter(r -> !r.isTrashed())
+                .filter(r -> radius <= 0 || (player != null && r.dimension.equals(dimension)
+                        && !(r instanceof BlockRecord b && b.global)
+                        && player.squaredDistanceTo(r.x, r.y, r.z) <= (double) radius * radius))
                 .sorted(Comparator.comparingDouble(r -> player == null ? 0 : player.squaredDistanceTo(r.x, r.y, r.z)))
                 .toList();
+        if (query.isEmpty()) {
+            source.sendFeedback(Text.literal(records.size() + " containers within " + radius + " blocks:"));
+            for (ContainerRecord r : records) source.sendFeedback(Text.literal(describe(r)));
+            return records.size();
+        }
         for (ContainerRecord r : records) {
             for (ItemIndex.IndexedItem item : EntityTrackerClient.index().items(r)) {
                 if (!item.searchText().contains(query)) continue;
@@ -192,8 +211,21 @@ public final class DebugCommand {
                         + (path.isEmpty() ? "" : " > " + path) + "  -  " + TrackerScreen.where(r)));
             }
         }
-        source.sendFeedback(Text.literal(hits + " matches for \"" + query + "\""));
+        source.sendFeedback(Text.literal(hits + " matches for \"" + query + "\""
+                + (radius > 0 ? " within " + radius + " blocks" : "")));
         return hits;
+    }
+
+    /** search <text> | search nearby <radius> [text] */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<FabricClientCommandSource> searchNode(BankManager banks, String name) {
+        return literal(name)
+                .then(literal("nearby").then(argument("radius", IntegerArgumentType.integer(1, 4096))
+                        .executes(ctx -> search(ctx.getSource(), banks, "", IntegerArgumentType.getInteger(ctx, "radius")))
+                        .then(argument("text", StringArgumentType.greedyString())
+                                .executes(ctx -> search(ctx.getSource(), banks, StringArgumentType.getString(ctx, "text"),
+                                        IntegerArgumentType.getInteger(ctx, "radius"))))))
+                .then(argument("text", StringArgumentType.greedyString())
+                        .executes(ctx -> search(ctx.getSource(), banks, StringArgumentType.getString(ctx, "text"), 0)));
     }
 
     private static int openArea(FabricClientCommandSource source, BankManager banks, Trash.Area area) {

@@ -6,7 +6,6 @@
   "screen.entitytracker.open_button": "Open Entity Container Tracker",
   "screen.entitytracker.destroyed_shown": "Destroyed: shown",
   "screen.entitytracker.destroyed_hidden": "Destroyed: hidden",
-  "screen.entitytracker.everywhere": "everywhere",
   "screen.entitytracker.other_account": "on account %s",
   "screen.entitytracker.no_bank": "Not in a world",
   "screen.entitytracker.no_results": "Nothing found",

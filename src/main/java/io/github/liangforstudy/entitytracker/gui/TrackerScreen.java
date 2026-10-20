@@ -315,32 +315,28 @@ public final class TrackerScreen extends Screen {
 
     public static String where(ContainerRecord r) {
         MinecraftClient client = MinecraftClient.getInstance();
-        StringBuilder sb = new StringBuilder();
+        List<String> parts = new ArrayList<>();
         if (r instanceof BlockRecord block && block.global) {
-            sb.append(Text.translatable("screen.entitytracker.everywhere").getString());
-            // Another account's ender chest: say which account to switch to.
+            // Ender chest: no place or status. Another account's says which account to switch to.
             MemoryBank bank = EntityTrackerClient.banks().bank();
             if (bank != null && block.owner != null && !block.owner.equals(bank.currentPlayer)) {
-                sb.append(", ").append(Text.translatable("screen.entitytracker.other_account",
+                parts.add(Text.translatable("screen.entitytracker.other_account",
                         block.ownerName != null ? block.ownerName : block.owner.toString()).getString());
             }
-        } else if (client.player != null && client.world != null
-                && r.dimension.equals(client.world.getRegistryKey().getValue().toString())) {
-            sb.append(Math.round(Math.sqrt(client.player.squaredDistanceTo(r.x, r.y, r.z)))).append("m");
         } else {
-            sb.append(r.dimension.replace("minecraft:", ""));
+            String place = client.player != null && client.world != null
+                    && r.dimension.equals(client.world.getRegistryKey().getValue().toString())
+                    ? Math.round(Math.sqrt(client.player.squaredDistanceTo(r.x, r.y, r.z))) + "m"
+                    : r.dimension.replace("minecraft:", "");
+            if (r instanceof BlockRecord block) {
+                place += " (" + block.pos.getX() + ", " + block.pos.getY() + ", " + block.pos.getZ() + ")";
+            }
+            parts.add(place);
+            parts.add(Text.translatable("screen.entitytracker.status." + r.status.name().toLowerCase(Locale.ROOT)).getString());
         }
-        if (r instanceof BlockRecord block && !block.global) {
-            sb.append(" (").append(block.pos.getX()).append(", ").append(block.pos.getY()).append(", ")
-                    .append(block.pos.getZ()).append(")");
-        }
-        // An ender chest has no place to be loaded or missing; skip its status.
-        if (!(r instanceof BlockRecord b && b.global)) {
-            sb.append("  -  ").append(Text.translatable("screen.entitytracker.status." + r.status.name().toLowerCase(Locale.ROOT)).getString());
-        }
-        sb.append("  -  ").append(Text.translatable("screen.entitytracker.seen_ago", age(r.lastSeen)).getString());
-        if (r.isTrashed()) sb.append("  -  ").append(Text.translatable("screen.entitytracker.in_trash", age(r.trashedAt)).getString());
-        return sb.toString();
+        parts.add(Text.translatable("screen.entitytracker.seen_ago", age(r.lastSeen)).getString());
+        if (r.isTrashed()) parts.add(Text.translatable("screen.entitytracker.in_trash", age(r.trashedAt)).getString());
+        return String.join("  -  ", parts);
     }
 
     static int statusColor(RecordStatus status) {
