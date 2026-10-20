@@ -10,6 +10,7 @@ import io.github.liangforstudy.entitytracker.search.ItemIndex;
 import io.github.liangforstudy.entitytracker.data.BlockRecord;
 import io.github.liangforstudy.entitytracker.data.ContainerRecord;
 import io.github.liangforstudy.entitytracker.data.EntityRecord;
+import io.github.liangforstudy.entitytracker.data.InventoryRecord;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.gui.AreaConfirmScreen;
 import io.github.liangforstudy.entitytracker.gui.OpenTriggers;
@@ -146,6 +147,26 @@ public final class DebugCommand {
                     return records.size();
                 }))
                 .then(searchNode(banks, "search"))
+                // Testing only: pretend containers within 8 blocks were last opened N days ago.
+                .then(literal("debug").then(literal("age").then(argument("days", IntegerArgumentType.integer(0, 365)).executes(ctx -> {
+                    MemoryBank bank = banks.bank();
+                    var player = MinecraftClient.getInstance().player;
+                    if (bank == null || player == null) return fail(ctx.getSource(), "No bank open");
+                    int days = IntegerArgumentType.getInteger(ctx, "days");
+                    long shift = days * 86_400_000L;
+                    // Pretend the player was on this server on each of those days.
+                    for (int i = 1; i <= days; i++) bank.playDays.add(java.time.LocalDate.now().minusDays(i).toString());
+                    int n = 0;
+                    for (ContainerRecord r : bank.allRecords().toList()) {
+                        if (r.hasSnapshot() && player.squaredDistanceTo(r.x, r.y, r.z) <= 64) {
+                            r.lastOpened = System.currentTimeMillis() - shift;
+                            n++;
+                        }
+                    }
+                    bank.markDirty();
+                    ctx.getSource().sendFeedback(Text.literal("Aged " + n + " containers"));
+                    return n;
+                }))))
                 .then(literal("save").executes(ctx -> {
                     banks.saveNow();
                     ctx.getSource().sendFeedback(Text.literal("Saved"));
@@ -164,6 +185,7 @@ public final class DebugCommand {
         String contents = r.hasSnapshot()
                 ? r.items.stream().map(DebugCommand::stackSummary).collect(Collectors.joining(", "))
                 : "never opened";
+        if (r instanceof InventoryRecord) return "- On me: " + contents;
         String place = r instanceof EntityRecord e ? "home chunk " + e.homeChunkX + "," + e.homeChunkZ
                 : r instanceof BlockRecord b && b.global ? "ender chest"
                 : "at " + ((BlockRecord) r).pos.toShortString()
@@ -173,7 +195,8 @@ public final class DebugCommand {
                 label, r.status, dist, r.dimension.replace("minecraft:", ""), place,
                 age(r.lastSeen), r.hasSnapshot() ? age(r.lastOpened) + " ago" : "never",
                 contents.isEmpty() ? "empty" : contents, (reappeared ? " (reappeared)" : "")
-                        + (r.isTrashed() ? " (in trash " + age(r.trashedAt) + ")" : ""));
+                        + (r.isTrashed() ? " (in trash " + age(r.trashedAt) + ")" : "")
+                        + warningSuffix(r));
     }
 
     /**
@@ -190,7 +213,9 @@ public final class DebugCommand {
         var world = MinecraftClient.getInstance().world;
         String dimension = world == null ? "" : world.getRegistryKey().getValue().toString();
         int hits = 0;
-        List<ContainerRecord> records = bank.allRecords().filter(r -> !r.isTrashed())
+        List<ContainerRecord> records = java.util.stream.Stream.concat(
+                        java.util.stream.Stream.ofNullable(InventoryRecord.current()), // "On me" first
+                        bank.allRecords().filter(r -> !r.isTrashed()))
                 .filter(r -> radius <= 0 || (player != null && r.dimension.equals(dimension)
                         && !(r instanceof BlockRecord b && b.global)
                         && player.squaredDistanceTo(r.x, r.y, r.z) <= (double) radius * radius))
@@ -207,8 +232,8 @@ public final class DebugCommand {
                 hits++;
                 String path = String.join(" > ", item.path());
                 source.sendFeedback(Text.literal("- " + item.stack().getCount() + "x "
-                        + item.stack().getName().getString() + " in " + TrackerScreen.label(r) + " #" + (item.slot() + 1)
-                        + (path.isEmpty() ? "" : " > " + path) + "  -  " + TrackerScreen.where(r)));
+                        + item.stack().getName().getString() + " in " + TrackerScreen.title(r)
+                        + (path.isEmpty() ? "" : " > " + path) + "  -  " + TrackerScreen.where(r) + warningSuffix(r)));
             }
         }
         source.sendFeedback(Text.literal(hits + " matches for \"" + query + "\""
@@ -236,6 +261,11 @@ public final class DebugCommand {
         if (found.isEmpty()) return fail(source, "No remembered containers in that area");
         OpenTriggers.openLater(new AreaConfirmScreen(found, area));
         return found.size();
+    }
+
+    private static String warningSuffix(ContainerRecord r) {
+        List<String> w = TrackerScreen.warnings(r);
+        return w.isEmpty() ? "" : "  [" + String.join("; ", w) + "]";
     }
 
     private static String stackSummary(ContainerRecord.SlotItem item) {

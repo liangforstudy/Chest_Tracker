@@ -4,30 +4,41 @@ import net.minecraft.entity.Entity;
 import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
 import java.util.UUID;
 
 /**
- * Remembers the last entity or block the player right-clicked (CLAUDE.md 4.1 step 1), fed by
- * ClientPlayerInteractionManagerMixin. Only the most recent one counts, so a screen is never
- * attributed to something clicked before it.
+ * Recent right-clicks on entities and blocks (CLAUDE.md 4.1 step 1, 4.1d A), fed by the
+ * interaction mixins. Kept as a queue, not just the last click: under lag, cart 1's screen can
+ * arrive after the player has already clicked cart 2, and the server answers clicks in order.
  */
 public final class InteractionTracker {
-    public record PendingTarget(UUID uuid, int networkId, long tick) {}
+    private static final int MAX_PENDING = 8;
 
-    public record PendingBlock(BlockPos pos, long tick) {}
+    /** Either an entity click (uuid != null) or a block click (pos != null). */
+    public record Pending(@Nullable UUID uuid, int networkId, @Nullable BlockPos pos, long tick) {
+        public boolean isEntity() {
+            return uuid != null;
+        }
+    }
 
-    private @Nullable PendingTarget pending;
-    private @Nullable PendingBlock pendingBlock;
+    private final Deque<Pending> queue = new ArrayDeque<>();
     private long tick;
 
     public void set(Entity entity) {
-        pending = new PendingTarget(entity.getUuid(), entity.getId(), tick);
-        pendingBlock = null;
+        add(new Pending(entity.getUuid(), entity.getId(), null, tick));
     }
 
     public void setBlock(BlockPos pos) {
-        pendingBlock = new PendingBlock(pos.toImmutable(), tick);
-        pending = null;
+        add(new Pending(null, -1, pos.toImmutable(), tick));
+    }
+
+    private void add(Pending p) {
+        queue.addLast(p);
+        while (queue.size() > MAX_PENDING) queue.removeFirst();
     }
 
     public void tick() {
@@ -38,20 +49,30 @@ public final class InteractionTracker {
         return tick;
     }
 
-    /** The pending entity if it is still fresh enough to bind a screen to. */
-    public @Nullable PendingTarget fresh(int maxAgeTicks) {
-        if (pending == null || tick - pending.tick() > maxAgeTicks) return null;
-        return pending;
+    /** Clicks still fresh enough to bind a screen to, oldest first. */
+    public List<Pending> fresh(int maxAgeTicks) {
+        queue.removeIf(p -> tick - p.tick() > maxAgeTicks);
+        return new ArrayList<>(queue);
     }
 
-    /** The pending block if it is still fresh enough to bind a screen to. */
-    public @Nullable PendingBlock freshBlock(int maxAgeTicks) {
-        if (pendingBlock == null || tick - pendingBlock.tick() > maxAgeTicks) return null;
-        return pendingBlock;
+    /** A screen was bound to this click: it and every older click are done. */
+    public void consume(Pending used) {
+        while (!queue.isEmpty()) {
+            if (queue.removeFirst() == used) return;
+        }
+    }
+
+    /** A mount screen opened for this entity: drop its click and older ones, if it was clicked. */
+    public void consumeEntity(UUID uuid) {
+        for (Pending p : queue) {
+            if (uuid.equals(p.uuid())) {
+                consume(p);
+                return;
+            }
+        }
     }
 
     public void clear() {
-        pending = null;
-        pendingBlock = null;
+        queue.clear();
     }
 }

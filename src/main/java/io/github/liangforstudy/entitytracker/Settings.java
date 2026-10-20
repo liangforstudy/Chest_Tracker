@@ -15,11 +15,21 @@ public final class Settings {
     /** An entity vanishing closer than this, followed by item drops, counts as likely destroyed. */
     public static double destroyDistance = 16.0;
     /** Ticks to wait for item drops after a nearby entity disappears. */
-    public static int dropWindowTicks = 10;
+    public static int dropWindowTicks = 20;
     /** Ticks between position-tracking passes. */
     public static int trackIntervalTicks = 20;
     /** Ticks of quiet after a change before the bank is written. */
     public static int saveDebounceTicks = 100;
+    /** Days without opening after which an entry counts as stale. */
+    public static int staleDays = 7;
+    /**
+     * "Missing" is only judged within this distance of the entity's last position. Servers only
+     * send entities within their tracking range (often 48-96 blocks), which is less than the
+     * view distance, so farther away a loaded home area proves nothing.
+     */
+    public static double missingCheckRange = 48.0;
+    /** Radius around a vanished entity in which dropped items count as its drops. */
+    public static double dropRadius = 2.5;
     /** Days a record stays in the trash (restorable) before it is forgotten. */
     public static int trashDays = 7;
     /** Daily backups to keep per bank. */

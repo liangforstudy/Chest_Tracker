@@ -1,8 +1,11 @@
 package io.github.liangforstudy.entitytracker.gui;
 
 import io.github.liangforstudy.entitytracker.EntityTrackerClient;
+import io.github.liangforstudy.entitytracker.Settings;
 import io.github.liangforstudy.entitytracker.data.BlockRecord;
 import io.github.liangforstudy.entitytracker.data.ContainerRecord;
+import io.github.liangforstudy.entitytracker.data.EntityRecord;
+import io.github.liangforstudy.entitytracker.data.InventoryRecord;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.data.RecordStatus;
 import io.github.liangforstudy.entitytracker.search.ItemIndex;
@@ -12,6 +15,8 @@ import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ConfirmScreen;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.input.KeyInput;
+import org.lwjgl.glfw.GLFW;
 import net.minecraft.client.gui.widget.AlwaysSelectedEntryListWidget;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
@@ -22,21 +27,33 @@ import net.minecraft.registry.Registries;
 import net.minecraft.screen.ScreenTexts;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Search screen over everything remembered. Empty search lists containers; typing lists matching
  * items (nested ones included). Vanilla widgets only, rows tall enough to tap (PojavLauncher).
  */
 public final class TrackerScreen extends Screen {
-    private static final int ROW_HEIGHT = 26;
+    private static final int ROW_HEIGHT = 46; // four lines: what / which container / where+status / notes
     private static final int MAX_ROWS = 500;
 
     private TextFieldWidget search;
+    private @Nullable String pendingTooltip;
+    /** Keys of selected containers (Ctrl/Shift-click, or taps in Select mode). */
+    private final Set<String> selection = new LinkedHashSet<>();
+    private boolean selectMode;
+    private int lastToggled = -1;
+    // Normal bar / bulk bar buttons; shown and hidden in place so the list keeps its scroll.
+    private ButtonWidget viewButton, destroyedButton, selectButton, doneButton;
+    private ButtonWidget bulkPrimary, bulkDelete, selectAllButton, cancelButton;
+    private int tooltipX, tooltipY;
     private ResultList list;
     private boolean showDestroyed = true;
     /** false = remembered containers, true = the trash. */
@@ -63,26 +80,38 @@ public final class TrackerScreen extends Screen {
         list = new ResultList(client, width, height - 80, 50);
         addDrawableChild(list);
 
-        // Bottom bar: views and filters only. Actions on a container live in its row menu.
+        // Bottom bar: views and filters, or bulk actions while something is selected.
         menu.clear();
-        int buttonY = height - 26;
-        int count = trashView ? 2 : 3;
-        int w = Math.min(120, (width - 40) / count);
-        int x0 = width / 2 - (w * count + 4 * (count - 1)) / 2;
-        addDrawableChild(ButtonWidget.builder(Text.translatable(trashView ? "screen.entitytracker.view_trash"
+        viewButton = addDrawableChild(ButtonWidget.builder(Text.translatable(trashView ? "screen.entitytracker.view_trash"
                 : "screen.entitytracker.view_active"), b -> {
             trashView = !trashView;
+            clearSelection();
             clearAndInit();
-        }).dimensions(x0, buttonY, w, 20).build());
-        if (!trashView) {
-            addDrawableChild(ButtonWidget.builder(destroyedLabel(), b -> {
-                showDestroyed = !showDestroyed;
-                b.setMessage(destroyedLabel());
-                refresh();
-            }).dimensions(x0 + w + 4, buttonY, w, 20).build());
-        }
-        addDrawableChild(ButtonWidget.builder(ScreenTexts.DONE, b -> close())
-                .dimensions(x0 + (w + 4) * (count - 1), buttonY, w, 20).build());
+        }).build());
+        destroyedButton = addDrawableChild(ButtonWidget.builder(destroyedLabel(), b -> {
+            showDestroyed = !showDestroyed;
+            b.setMessage(destroyedLabel());
+            refresh();
+        }).build());
+        selectButton = addDrawableChild(ButtonWidget.builder(Text.translatable("screen.entitytracker.select"), b -> {
+            selectMode = true;
+            updateBar();
+        }).build());
+        doneButton = addDrawableChild(ButtonWidget.builder(ScreenTexts.DONE, b -> close()).build());
+        bulkPrimary = addDrawableChild(ButtonWidget.builder(Text.empty(), b -> bulkPrimary()).build());
+        bulkDelete = addDrawableChild(ButtonWidget.builder(Text.empty(), b -> bulkDelete()).build());
+        selectAllButton = addDrawableChild(ButtonWidget.builder(Text.translatable("screen.entitytracker.select_all"), b -> {
+            for (ResultList.Entry e : list.children()) {
+                if (!(e.row.record() instanceof InventoryRecord)) selection.add(e.row.record().key());
+            }
+            selectMode = true;
+            updateBar();
+        }).build());
+        cancelButton = addDrawableChild(ButtonWidget.builder(ScreenTexts.CANCEL, b -> {
+            clearSelection();
+            updateBar();
+        }).build());
+        updateBar();
 
         setInitialFocus(search);
         refresh();
@@ -93,9 +122,95 @@ public final class TrackerScreen extends Screen {
                 : "screen.entitytracker.destroyed_hidden");
     }
 
+    /** Lays out whichever bottom bar applies: views and filters, or bulk actions. */
+    private void updateBar() {
+        boolean bulk = selectMode || !selection.isEmpty();
+        List<ButtonWidget> shown = new ArrayList<>();
+        for (ButtonWidget b : List.of(viewButton, destroyedButton, selectButton, doneButton, bulkPrimary, bulkDelete,
+                selectAllButton, cancelButton)) {
+            b.visible = false;
+        }
+        if (bulk) {
+            int n = selection.size();
+            bulkPrimary.setMessage(Text.translatable(trashView ? "screen.entitytracker.bulk.restore"
+                    : "screen.entitytracker.bulk.mark", n));
+            bulkPrimary.active = n > 0;
+            shown.add(bulkPrimary);
+            if (trashView) {
+                bulkDelete.setMessage(Text.translatable("screen.entitytracker.bulk.delete", n));
+                bulkDelete.active = n > 0;
+                shown.add(bulkDelete);
+            }
+            shown.add(selectAllButton);
+            shown.add(cancelButton);
+        } else {
+            shown.add(viewButton);
+            if (!trashView) shown.add(destroyedButton);
+            shown.add(selectButton);
+            shown.add(doneButton);
+        }
+        int w = Math.min(120, (width - 40) / shown.size());
+        int x = width / 2 - (w * shown.size() + 4 * (shown.size() - 1)) / 2;
+        for (ButtonWidget b : shown) {
+            b.visible = true;
+            b.setDimensionsAndPosition(w, 20, x, height - 26);
+            x += w + 4;
+        }
+    }
+
+    private void clearSelection() {
+        selection.clear();
+        selectMode = false;
+        lastToggled = -1;
+    }
+
+    private List<ContainerRecord> selectedRecords() {
+        MemoryBank bank = EntityTrackerClient.banks().bank();
+        List<ContainerRecord> out = new ArrayList<>();
+        if (bank == null) return out;
+        for (String key : selection) {
+            ContainerRecord r = bank.getByKey(key);
+            if (r != null) out.add(r);
+        }
+        return out;
+    }
+
+    /** Mark destroyed (one undoable action) or, in the trash view, restore the selection. */
+    private void bulkPrimary() {
+        MemoryBank bank = EntityTrackerClient.banks().bank();
+        List<ContainerRecord> records = selectedRecords();
+        if (bank == null || records.isEmpty()) return;
+        if (trashView) {
+            for (ContainerRecord r : records) Trash.restore(bank, r);
+        } else {
+            Trash.trashArea(bank, records);
+            if (client.player != null) {
+                client.player.sendMessage(Text.translatable("screen.entitytracker.area.done", records.size()), false);
+            }
+        }
+        clearSelection();
+        refresh();
+        updateBar();
+    }
+
+    private void bulkDelete() {
+        MemoryBank bank = EntityTrackerClient.banks().bank();
+        List<ContainerRecord> records = selectedRecords();
+        if (bank == null || records.isEmpty()) return;
+        client.setScreen(new ConfirmScreen(yes -> {
+            if (yes) {
+                for (ContainerRecord r : records) Trash.deletePermanently(bank, r);
+                clearSelection();
+            }
+            client.setScreen(this);
+        }, Text.translatable("screen.entitytracker.bulk.delete_confirm", records.size()),
+                Text.translatable("screen.entitytracker.bulk.delete_body")));
+    }
+
     /** Opens the action menu for a container at the given screen position. */
     private void openMenu(ContainerRecord record, double x, double y) {
         closeMenu();
+        if (record instanceof InventoryRecord) return; // nothing to mark destroyed
         List<ButtonWidget.Builder> items = new ArrayList<>();
         if (trashView) {
             items.add(ButtonWidget.builder(Text.translatable("screen.entitytracker.restore"), b -> act(() -> {
@@ -107,6 +222,13 @@ public final class TrackerScreen extends Screen {
                 confirmDelete(record);
             }));
         } else {
+            boolean hasExplanations = statusExplain(record) != null || notes(record).stream().anyMatch(n -> n.explain() != null);
+            if (hasExplanations) {
+                items.add(ButtonWidget.builder(Text.translatable("screen.entitytracker.show_warnings"), b -> {
+                    closeMenu();
+                    client.setScreen(new DetailScreen(record, this, ""));
+                }));
+            }
             items.add(ButtonWidget.builder(Text.translatable("screen.entitytracker.mark_destroyed"), b -> act(() -> {
                 MemoryBank bank = EntityTrackerClient.banks().bank();
                 if (bank != null) Trash.trash(bank, record);
@@ -134,6 +256,27 @@ public final class TrackerScreen extends Screen {
 
     private boolean insideMenu(double x, double y) {
         return x >= menuX && x < menuX + menuW && y >= menuY && y < menuY + menuH;
+    }
+
+    @Override
+    public boolean keyPressed(KeyInput input) {
+        if (input.key() == GLFW.GLFW_KEY_ESCAPE) {
+            // Esc closes an open menu, then clears the search, and only then closes the screen.
+            if (!menu.isEmpty()) {
+                closeMenu();
+                return true;
+            }
+            if (selectMode || !selection.isEmpty()) {
+                clearSelection();
+                updateBar();
+                return true;
+            }
+            if (!search.getText().isEmpty()) {
+                search.setText("");
+                return true;
+            }
+        }
+        return super.keyPressed(input);
     }
 
     @Override
@@ -170,11 +313,15 @@ public final class TrackerScreen extends Screen {
         if (bank != null) {
             String query = search.getText().trim().toLowerCase(Locale.ROOT);
             if (query.startsWith("@")) query = query.substring(1); // @head:Notch until full filters (4.6)
-            List<ContainerRecord> records = bank.allRecords()
+            List<ContainerRecord> records = new ArrayList<>();
+            // Your own inventory first, so "it was on me all along" is the first thing you see.
+            InventoryRecord onMe = trashView ? null : InventoryRecord.current();
+            if (onMe != null) records.add(onMe);
+            records.addAll(bank.allRecords()
                     .filter(r -> trashView ? r.isTrashed()
                             : !r.isTrashed() && (showDestroyed || r.status != RecordStatus.LIKELY_DESTROYED))
                     .sorted(Comparator.comparingDouble(TrackerScreen::sortDistance))
-                    .toList();
+                    .toList());
             ItemIndex index = EntityTrackerClient.index();
             for (ContainerRecord record : records) {
                 if (query.isEmpty()) {
@@ -194,13 +341,34 @@ public final class TrackerScreen extends Screen {
     private static double sortDistance(ContainerRecord r) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || client.world == null) return 0;
-        double d = client.player.squaredDistanceTo(r.x, r.y, r.z);
-        return r.dimension.equals(client.world.getRegistryKey().getValue().toString()) ? d : 1e15 + d;
+        if (r.dimension.equals(client.world.getRegistryKey().getValue().toString())) return client.player.squaredDistanceTo(r.x, r.y, r.z);
+        // Another dimension: by its converted position, so a nether stash "under" you ranks high.
+        double converted = Dimensions.convertedDistance(r);
+        return Double.isNaN(converted) ? 1e15 : converted * converted;
+    }
+
+    private void showTooltip(@Nullable String text, int x, int y) {
+        if (text == null || !menu.isEmpty()) return;
+        pendingTooltip = text;
+        tooltipX = x;
+        tooltipY = y;
+    }
+
+    /** Wrapped explanation tooltip, readable width. */
+    static void drawExplanation(DrawContext context, net.minecraft.client.font.TextRenderer tr, String text, int x, int y) {
+        List<net.minecraft.text.OrderedText> lines = new ArrayList<>();
+        for (String para : text.split("\n")) {
+            if (para.isEmpty()) lines.add(net.minecraft.text.OrderedText.EMPTY);
+            else lines.addAll(tr.wrapLines(Text.literal(para), 220));
+        }
+        context.drawTooltip(lines, x, y);
     }
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        pendingTooltip = null;
         super.render(context, mouseX, mouseY, delta);
+        if (pendingTooltip != null) drawExplanation(context, textRenderer, pendingTooltip, tooltipX, tooltipY);
         context.drawCenteredTextWithShadow(textRenderer, title, width / 2, 8, 0xFFFFFFFF);
         if (EntityTrackerClient.banks().bank() == null) {
             context.drawCenteredTextWithShadow(textRenderer, Text.translatable("screen.entitytracker.no_bank"),
@@ -235,16 +403,18 @@ public final class TrackerScreen extends Screen {
 
         @Override
         public int getRowWidth() {
-            return Math.min(360, width - 24);
+            return Math.min(520, width - 30);
         }
 
         final class Entry extends AlwaysSelectedEntryListWidget.Entry<Entry> {
             private final Row row;
             private final ItemStack icon;
+            private final ItemStack containerIcon;
 
             Entry(Row row) {
                 this.row = row;
-                this.icon = row.item() != null ? row.item().stack() : entityIcon(row.record().type);
+                this.containerIcon = entityIcon(row.record().type);
+                this.icon = row.item() != null ? row.item().stack() : containerIcon;
             }
 
             @Override
@@ -252,28 +422,59 @@ public final class TrackerScreen extends Screen {
                 int x = getContentX();
                 int y = getContentY();
                 ContainerRecord r = row.record();
-                context.drawItem(icon, x + 2, y + 3);
-                if (row.item() != null) context.drawStackOverlay(textRenderer, icon, x + 2, y + 3);
-
-                String line1;
-                String line2;
-                if (row.item() == null) {
-                    line1 = label(r) + "  -  " + (r.hasSnapshot()
-                            ? Text.translatable("screen.entitytracker.stacks", row.itemCount()).getString()
-                            : Text.translatable("screen.entitytracker.never_opened").getString());
-                    line2 = where(r);
-                } else {
-                    line1 = row.item().stack().getName().getString();
-                    String path = String.join(" > ", row.item().path());
-                    line2 = label(r) + " #" + (row.item().slot() + 1) + (path.isEmpty() ? "" : " > " + path)
-                            + "  -  " + where(r);
+                if (selection.contains(r.key())) {
+                    context.fill(x - 2, y - 2, x + getRowWidth() - 2, y + ROW_HEIGHT - 4, 0x553A78C8);
+                    context.drawTextWithShadow(textRenderer, "\u2714", x - 12, y + 17, 0xFF8FC8FF);
                 }
+                // Icons: the item found, with the container it is in underneath.
+                context.drawItem(icon, x + 2, y + 3);
+                if (row.item() != null) {
+                    context.drawStackOverlay(textRenderer, icon, x + 2, y + 3);
+                    context.drawItem(containerIcon, x + 2, y + 23);
+                }
+
                 int textX = x + 24;
                 int maxWidth = getContentWidthSafe() - 42;
-                context.drawTextWithShadow(textRenderer, "\u22EE", x + getRowWidth() - 10, y + 9,
+                context.drawTextWithShadow(textRenderer, "\u22EE", x + getRowWidth() - 10, y + 17,
                         hovered ? 0xFFFFFFFF : 0xFF888888);
-                context.drawTextWithShadow(textRenderer, trim(line1, maxWidth), textX, y + 3, 0xFFFFFFFF);
-                context.drawTextWithShadow(textRenderer, trim(line2, maxWidth), textX, y + 14, statusColor(r.status));
+                int lineY = y + 3;
+                if (row.item() == null) {
+                    // Container row: which container / where and status / notes.
+                    String count = r.hasSnapshot()
+                            ? Text.translatable("screen.entitytracker.stacks", row.itemCount()).getString()
+                            : Text.translatable("screen.entitytracker.never_opened").getString();
+                    context.drawTextWithShadow(textRenderer, trim(title(r) + " · " + count, maxWidth), textX, lineY, 0xFFFFFFFF);
+                } else {
+                    // Item row: the item / which container (and inside what) / where and status / notes.
+                    context.drawTextWithShadow(textRenderer, trim(row.item().stack().getName().getString(), maxWidth),
+                            textX, lineY, 0xFFFFFFFF);
+                    lineY += 11;
+                    String path = String.join(" > ", row.item().path());
+                    context.drawTextWithShadow(textRenderer, trim(title(r) + (path.isEmpty() ? "" : " > " + path), maxWidth),
+                            textX, lineY, 0xFFDDDDDD);
+                }
+                lineY += 11;
+                String whereLine = trim(where(r), maxWidth);
+                context.drawTextWithShadow(textRenderer, whereLine, textX, lineY, statusColor(r.status));
+                if (hovered && mouseY >= lineY - 1 && mouseY < lineY + 10 && mouseX >= textX
+                        && mouseX < textX + textRenderer.getWidth(whereLine)) {
+                    showTooltip(statusExplain(r), mouseX, mouseY);
+                }
+                lineY += 11;
+                // Notes: warnings (amber), hints (blue), "last checked" (grey), left to right.
+                int nx = textX;
+                for (Note note : notes(r)) {
+                    String text = (nx == textX ? "" : " · ") + note.text();
+                    int room = textX + maxWidth - nx;
+                    if (room <= 0) break;
+                    String shown = trim(text, room);
+                    context.drawTextWithShadow(textRenderer, shown, nx, lineY, note.color());
+                    int w = textRenderer.getWidth(shown);
+                    if (hovered && mouseY >= lineY - 1 && mouseY < lineY + 10 && mouseX >= nx && mouseX < nx + w) {
+                        showTooltip(note.explain(), mouseX, mouseY);
+                    }
+                    nx += w;
+                }
 
                 if (hovered && mouseX >= x + 2 && mouseX < x + 18 && mouseY >= y + 3 && mouseY < y + 19
                         && row.item() != null) {
@@ -293,8 +494,30 @@ public final class TrackerScreen extends Screen {
             @Override
             public boolean mouseClicked(Click click, boolean doubled) {
                 ResultList.this.setSelected(this);
-                // The "⋮" at the end of the row opens the menu with a plain tap (touch screens).
-                if (click.x() >= getContentX() + getRowWidth() - 16) openMenu(row.record(), click.x(), click.y());
+                boolean ctrl = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
+                boolean shift = (click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
+                boolean selecting = selectMode || !selection.isEmpty() || ctrl || shift;
+                // The "⋮" at the end of the row opens the menu with a plain tap (touch screens);
+                // while selecting, a click toggles the row; otherwise it opens the detail view.
+                if (click.x() >= getContentX() + getRowWidth() - 16) {
+                    openMenu(row.record(), click.x(), click.y());
+                } else if (selecting && !(row.record() instanceof InventoryRecord)) {
+                    int index = ResultList.this.children().indexOf(this);
+                    if (shift && lastToggled >= 0) {
+                        int from = Math.min(lastToggled, index), to = Math.max(lastToggled, index);
+                        for (int i = from; i <= to; i++) {
+                            ContainerRecord r = ResultList.this.children().get(i).row.record();
+                            if (!(r instanceof InventoryRecord)) selection.add(r.key());
+                        }
+                    } else if (!selection.remove(row.record().key())) {
+                        selection.add(row.record().key());
+                    }
+                    lastToggled = index;
+                    updateBar();
+                } else {
+                    String q = search.getText().trim().toLowerCase(Locale.ROOT);
+                    client.setScreen(new DetailScreen(row.record(), TrackerScreen.this, q.startsWith("@") ? q.substring(1) : q));
+                }
                 return true;
             }
 
@@ -305,7 +528,18 @@ public final class TrackerScreen extends Screen {
         }
     }
 
+    /** The container as a player would name it: "Chest at 210, 100, 213", "\"Pack\" (Donkey)". */
+    public static String title(ContainerRecord r) {
+        String label = label(r);
+        // In another dimension the place line already shows "Nether (x, y, z)".
+        if (r instanceof BlockRecord b && !b.global && r.dimension.equals(Dimensions.current())) {
+            return Text.translatable("screen.entitytracker.at", label, b.pos.getX(), b.pos.getY(), b.pos.getZ()).getString();
+        }
+        return label;
+    }
+
     public static String label(ContainerRecord r) {
+        if (r instanceof InventoryRecord) return Text.translatable("screen.entitytracker.on_me").getString();
         String type = r instanceof BlockRecord
                 ? Registries.BLOCK.get(Identifier.of(r.type)).getName().getString()
                 : Text.translatable(Registries.ENTITY_TYPE.get(Identifier.of(r.type)).getTranslationKey()).getString();
@@ -316,6 +550,7 @@ public final class TrackerScreen extends Screen {
     public static String where(ContainerRecord r) {
         MinecraftClient client = MinecraftClient.getInstance();
         List<String> parts = new ArrayList<>();
+        if (r instanceof InventoryRecord) return Text.translatable("screen.entitytracker.on_me_where").getString();
         if (r instanceof BlockRecord block && block.global) {
             // Ender chest: no place or status. Another account's says which account to switch to.
             MemoryBank bank = EntityTrackerClient.banks().bank();
@@ -324,19 +559,89 @@ public final class TrackerScreen extends Screen {
                         block.ownerName != null ? block.ownerName : block.owner.toString()).getString());
             }
         } else {
-            String place = client.player != null && client.world != null
-                    && r.dimension.equals(client.world.getRegistryKey().getValue().toString())
-                    ? Math.round(Math.sqrt(client.player.squaredDistanceTo(r.x, r.y, r.z))) + "m"
-                    : r.dimension.replace("minecraft:", "");
-            if (r instanceof BlockRecord block) {
-                place += " (" + block.pos.getX() + ", " + block.pos.getY() + ", " + block.pos.getZ() + ")";
-            }
-            parts.add(place);
-            parts.add(Text.translatable("screen.entitytracker.status." + r.status.name().toLowerCase(Locale.ROOT)).getString());
+            parts.add(place(r, false));
+            String status = Text.translatable("screen.entitytracker.status." + r.status.name().toLowerCase(Locale.ROOT)).getString();
+            boolean bad = r.status == RecordStatus.MISSING || r.status == RecordStatus.LIKELY_DESTROYED;
+            parts.add(bad ? "\u26A0 " + status : status);
         }
         parts.add(Text.translatable("screen.entitytracker.seen_ago", age(r.lastSeen)).getString());
         if (r.isTrashed()) parts.add(Text.translatable("screen.entitytracker.in_trash", age(r.trashedAt)).getString());
-        return String.join("  -  ", parts);
+        return String.join(" · ", parts);
+    }
+
+    /**
+     * Where a container is, from where the player stands: "12m (x, y, z)" in this dimension;
+     * "Nether (x, y, z) ≈ x, z here - 1,240m" in a dimension that converts (CLAUDE.md 4.1e);
+     * "End (x, y, z)" otherwise. {@code withCoords} adds coordinates for entities too.
+     */
+    public static String place(ContainerRecord r, boolean withCoords) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        String coords = r instanceof BlockRecord b
+                ? b.pos.getX() + ", " + b.pos.getY() + ", " + b.pos.getZ()
+                : Math.round(Math.floor(r.x)) + ", " + Math.round(Math.floor(r.y)) + ", " + Math.round(Math.floor(r.z));
+        boolean showCoords = withCoords;
+        if (client.player != null && r.dimension.equals(Dimensions.current())) {
+            String d = Math.round(Math.sqrt(client.player.squaredDistanceTo(r.x, r.y, r.z))) + "m";
+            return showCoords ? d + " (" + coords + ")" : d;
+        }
+        String there = Dimensions.displayName(r.dimension) + " (" + coords + ")";
+        double[] here = Dimensions.inCurrent(r);
+        if (here == null) return there;
+        return Text.translatable("screen.entitytracker.converted", there, Math.round(Math.floor(here[0])),
+                Math.round(Math.floor(here[1])), String.format(Locale.ROOT, "%,d", Math.round(Dimensions.convertedDistance(r)))).getString();
+    }
+
+    /** {@code explain}: what the note means, shown on hover / "Show warnings"; null if none. */
+    public record Note(String text, int color, @Nullable String explain) {}
+
+    /**
+     * An explanation from the language file, or null when its entry is empty or absent. Empty
+     * entries (e.g. "unloaded") are placeholders a resource pack can fill in.
+     */
+    static @Nullable String explain(String id, Object... args) {
+        String key = "screen.entitytracker.explain." + id;
+        String text = Text.translatable(key, args).getString();
+        return text.equals(key) || text.isBlank() ? null : text; // empty entry = no tooltip (yet)
+    }
+
+    /** Explanation of the status line (and the trash, if it is in there), or null. */
+    public static @Nullable String statusExplain(ContainerRecord r) {
+        if (r instanceof InventoryRecord || (r instanceof BlockRecord b && b.global)) return null;
+        String status = explain("status." + r.status.name().toLowerCase(Locale.ROOT));
+        String trash = r.isTrashed() ? explain("in_trash", Settings.trashDays) : null;
+        if (status == null) return trash;
+        return trash == null ? status : status + "\n\n" + trash;
+    }
+
+    /**
+     * Warning flags (amber), hints (blue) and "last checked" (grey) for a container (CLAUDE.md
+     * 4.1d), already translated. Shown, never acted on: the player decides what to do.
+     */
+    public static List<Note> notes(ContainerRecord r) {
+        List<Note> out = new ArrayList<>();
+        for (String flag : r.flags) out.add(new Note("\u26A0 " + note("warn", flag), 0xFFE8B04A, explain(flag)));
+        for (String hint : r.hints) out.add(new Note(note("hint", hint), 0xFF8FB8E8, explain(hint)));
+        if (r instanceof EntityRecord e && e.reappeared) {
+            out.add(new Note(Text.translatable("screen.entitytracker.note.reappeared").getString(), 0xFF9A9A9A, explain("reappeared")));
+        }
+        MemoryBank bank = EntityTrackerClient.banks().bank();
+        if (bank != null && bank.isStale(r)) {
+            int days = bank.playDaysSince(r.lastOpened);
+            out.add(new Note(Text.translatable("screen.entitytracker.warn.stale", days).getString(), 0xFF9A9A9A,
+                    explain("stale", days)));
+        }
+        return out;
+    }
+
+    /** The same notes as plain text, for chat. */
+    public static List<String> warnings(ContainerRecord r) {
+        return notes(r).stream().map(Note::text).toList();
+    }
+
+    private static String note(String kind, String id) {
+        String key = "screen.entitytracker." + kind + "." + id;
+        String text = Text.translatable(key).getString();
+        return text.equals(key) ? id : text; // unknown note from a newer version: show its id
     }
 
     static int statusColor(RecordStatus status) {
@@ -349,7 +654,7 @@ public final class TrackerScreen extends Screen {
     }
 
     /** The item with the same id (chest, barrel, chest_minecart, oak_chest_boat), else the spawn egg, else a chest. */
-    static ItemStack entityIcon(String type) {
+    public static ItemStack entityIcon(String type) {
         Identifier id = Identifier.of(type);
         Item item = Registries.ITEM.get(id);
         if (item == Items.AIR) item = Registries.ITEM.get(Identifier.of(id.getNamespace(), id.getPath() + "_spawn_egg"));
@@ -357,7 +662,7 @@ public final class TrackerScreen extends Screen {
         return new ItemStack(item);
     }
 
-    static String age(long millis) {
+    public static String age(long millis) {
         long s = Math.max(0, (System.currentTimeMillis() - millis) / 1000);
         if (s < 60) return s + "s";
         if (s < 3600) return s / 60 + "m";

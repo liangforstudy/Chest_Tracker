@@ -6,7 +6,9 @@ import com.google.gson.JsonObject;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /** What every remembered container has, whether it is an entity or a block. */
 public abstract class ContainerRecord {
@@ -26,6 +28,10 @@ public abstract class ContainerRecord {
     public List<SlotItem> items = new ArrayList<>();
     /** When the player marked it destroyed (moved to the trash); 0 = not in the trash. */
     public long trashedAt;
+    /** Warning flags (see {@link Notes}); cleared by a fresh snapshot. */
+    public Set<String> flags = new LinkedHashSet<>();
+    /** Hints that the contents may change on their own (see {@link Notes}). */
+    public Set<String> hints = new LinkedHashSet<>();
 
     public record SlotItem(int slot, JsonElement stack) {}
 
@@ -39,6 +45,7 @@ public abstract class ContainerRecord {
     public boolean isTrashed() {
         return trashedAt != 0;
     }
+
 
     protected void writeCommon(JsonObject o) {
         o.addProperty("type", type);
@@ -63,6 +70,18 @@ public abstract class ContainerRecord {
         }
         o.add("items", arr);
         if (trashedAt != 0) o.addProperty("trashedAt", trashedAt);
+        if (!flags.isEmpty()) o.add("flags", toArray(flags));
+        if (!hints.isEmpty()) o.add("hints", toArray(hints));
+    }
+
+    private static JsonArray toArray(Set<String> values) {
+        JsonArray a = new JsonArray();
+        values.forEach(a::add);
+        return a;
+    }
+
+    private static void readSet(JsonObject o, String key, Set<String> into) {
+        if (o.has(key)) for (JsonElement e : o.getAsJsonArray(key)) into.add(e.getAsString());
     }
 
     protected void readCommon(JsonObject o) {
@@ -91,5 +110,7 @@ public abstract class ContainerRecord {
             }
         }
         trashedAt = o.has("trashedAt") ? o.get("trashedAt").getAsLong() : 0;
+        readSet(o, "flags", flags);
+        readSet(o, "hints", hints);
     }
 }

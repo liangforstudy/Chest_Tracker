@@ -21,6 +21,7 @@ public final class BankManager {
     private final BankStorage storage;
     private @Nullable MemoryBank bank;
     private @Nullable String pendingWarning;
+    private long ticks;
 
     public BankManager(BankStorage storage) {
         this.storage = storage;
@@ -36,6 +37,7 @@ public final class BankManager {
 
     public void tick(MinecraftClient client) {
         if (bank == null && client.player != null && client.world != null) open(client);
+        if (bank != null && ++ticks % 1200 == 0) bank.markPlayedToday(); // also catches playing past midnight
         if (bank != null && bank.tickDebounce(Settings.saveDebounceTicks)) storage.save(bank);
         if (pendingWarning != null && client.player != null) {
             client.player.sendMessage(Text.literal(pendingWarning).formatted(Formatting.RED), false);
@@ -51,6 +53,7 @@ public final class BankManager {
         UUID me = client.player.getUuid();
         String myName = client.player.getName().getString();
         bank.currentPlayer = me;
+        bank.markPlayedToday();
         if (!myName.equals(bank.accounts.put(me, myName))) bank.markDirty();
         // Ender chests carried over from old per-account banks only know the account's UUID.
         for (BlockRecord r : bank.allBlocks()) {

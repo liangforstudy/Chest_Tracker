@@ -81,6 +81,20 @@ public final class ItemIndex {
         }
     }
 
+    /** Whether a stack, or anything inside it (shulker, bundle), matches a lowercase query. */
+    public static boolean matchesDeep(ItemStack stack, String query, int depth) {
+        if (query.isEmpty()) return false;
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.world == null) return false;
+        if (searchText(stack, Item.TooltipContext.create(client.world), client).contains(query)) return true;
+        if (depth >= MAX_DEPTH) return false;
+        ContainerComponent container = stack.get(DataComponentTypes.CONTAINER);
+        if (container != null) for (ItemStack c : container.iterateNonEmpty()) if (matchesDeep(c, query, depth + 1)) return true;
+        BundleContentsComponent bundle = stack.get(DataComponentTypes.BUNDLE_CONTENTS);
+        if (bundle != null) for (ItemStack c : bundle.iterate()) if (matchesDeep(c, query, depth + 1)) return true;
+        return false;
+    }
+
     /** Tooltip lines cover custom name, lore, enchantments and effects; the id covers the rest. */
     private static String searchText(ItemStack stack, Item.TooltipContext context, MinecraftClient client) {
         StringBuilder sb = new StringBuilder(Registries.ITEM.getId(stack.getItem()).toString());

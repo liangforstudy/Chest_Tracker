@@ -25,6 +25,10 @@ dependencies {
     modImplementation("net.fabricmc:fabric-loader:${property("deps.fabric_loader")}")
     modImplementation("net.fabricmc.fabric-api:fabric-api:${property("deps.fabric_api")}")
     modLocalRuntime("maven.modrinth:mcpfabric:${property("deps.mcpfabric")}")
+    // Dev client only: other mods to check how we sit alongside them
+    modLocalRuntime("maven.modrinth:shulkerboxtooltip:${property("deps.shulkerboxtooltip")}")
+    modLocalRuntime("maven.modrinth:modmenu:${property("deps.modmenu")}")
+    modLocalRuntime("maven.modrinth:placeholder-api:${property("deps.placeholder_api")}") // needed by Mod Menu
 }
 
 loom {

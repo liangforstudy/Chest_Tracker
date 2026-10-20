@@ -3,26 +3,41 @@ package io.github.liangforstudy.entitytracker.track;
 import io.github.liangforstudy.entitytracker.EntityTrackerClient;
 import io.github.liangforstudy.entitytracker.Settings;
 import io.github.liangforstudy.entitytracker.data.BlockRecord;
+import io.github.liangforstudy.entitytracker.data.ContainerRecord;
 import io.github.liangforstudy.entitytracker.data.EntityRecord;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
+import io.github.liangforstudy.entitytracker.data.Notes;
 import io.github.liangforstudy.entitytracker.data.RecordStatus;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientEntityEvents;
+import net.minecraft.block.AbstractFurnaceBlock;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
+import net.minecraft.block.BrewingStandBlock;
 import net.minecraft.block.EnderChestBlock;
+import net.minecraft.block.HopperBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.passive.AbstractDonkeyEntity;
+import net.minecraft.entity.vehicle.AbstractMinecartEntity;
+import net.minecraft.entity.vehicle.HopperMinecartEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.ChunkPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -38,7 +53,8 @@ public final class PositionTracker {
     /** Remembered entities that just vanished near the player, waiting to see if items drop. */
     private final List<Vanished> vanished = new ArrayList<>();
 
-    private record Vanished(UUID uuid, Vec3d pos, long tick) {}
+    /** {@code dropIds}: item ids that would prove it was broken (its contents, its own item). */
+    private record Vanished(UUID uuid, Vec3d pos, long tick, Set<String> dropIds) {}
 
     public PositionTracker(BankManager banks, InteractionTracker clock) {
         this.banks = banks;
@@ -118,22 +134,7 @@ public final class PositionTracker {
     private void onLoad(Entity entity, ClientWorld world) {
         MemoryBank bank = banks.bank();
         if (bank == null) return;
-        if (entity instanceof ItemEntity) {
-            // Items appearing where a remembered entity just vanished: it was most likely broken.
-            Vec3d pos = new Vec3d(entity.getX(), entity.getY(), entity.getZ());
-            for (Iterator<Vanished> it = vanished.iterator(); it.hasNext(); ) {
-                Vanished v = it.next();
-                if (v.pos.squaredDistanceTo(pos) > 4.0) continue;
-                EntityRecord record = bank.get(v.uuid);
-                if (record != null && record.status != RecordStatus.LOADED) {
-                    record.status = RecordStatus.LIKELY_DESTROYED;
-                    bank.markDirty();
-                    EntityTrackerClient.LOGGER.info("{} {} likely destroyed (items dropped)", record.type, record.uuid);
-                }
-                it.remove();
-            }
-            return;
-        }
+        if (entity instanceof ItemEntity) return; // drops are matched in tick(), once their item data arrives
         EntityRecord record = bank.get(entity.getUuid());
         if (record == null) return;
         // Recognised on sight, before opening (CLAUDE.md test 22).
@@ -155,8 +156,14 @@ public final class PositionTracker {
             EntityTrackerClient.LOGGER.info("{} {} died", record.type, record.uuid);
         } else {
             record.status = RecordStatus.UNLOADED;
+            if (nearPortal(world, entity.getBlockPos())) {
+                // Gone through a portal, not destroyed (CLAUDE.md 4.1d D); matching drops still override.
+                record.flags.add(Notes.WENT_THROUGH_PORTAL);
+                EntityTrackerClient.LOGGER.info("{} {} went through a portal", record.type, record.uuid);
+            }
             if (client.player != null && client.player.squaredDistanceTo(entity) < Settings.destroyDistance * Settings.destroyDistance) {
-                vanished.add(new Vanished(record.uuid, new Vec3d(entity.getX(), entity.getY(), entity.getZ()), clock.currentTick()));
+                vanished.add(new Vanished(record.uuid, new Vec3d(entity.getX(), entity.getY(), entity.getZ()),
+                        clock.currentTick(), dropIds(record, entity)));
             }
         }
         bank.markDirty();
@@ -164,9 +171,10 @@ public final class PositionTracker {
 
     /** Runs every tick; does a full pass every {@link Settings#trackIntervalTicks}. */
     public void tick(MinecraftClient client) {
-        vanished.removeIf(v -> clock.currentTick() - v.tick > Settings.dropWindowTicks);
         MemoryBank bank = banks.bank();
         ClientWorld world = client.world;
+        if (bank != null && world != null) matchDrops(world, bank);
+        vanished.removeIf(v -> clock.currentTick() - v.tick > Settings.dropWindowTicks);
         if (bank == null || world == null || clock.currentTick() % Settings.trackIntervalTicks != 0) return;
 
         Set<UUID> present = new HashSet<>();
@@ -175,6 +183,16 @@ public final class PositionTracker {
             if (record == null) continue;
             present.add(record.uuid);
             if (update(record, entity, world)) bank.markDirty();
+            if (checkEntityNotes(record, entity, world)) bank.markDirty();
+        }
+
+        // Nothing in another dimension can be loaded right now (e.g. just after going through a portal).
+        String here = world.getRegistryKey().getValue().toString();
+        for (ContainerRecord r : bank.allRecords().toList()) {
+            if (r.status == RecordStatus.LOADED && !here.equals(r.dimension) && !(r instanceof BlockRecord b && b.global)) {
+                r.status = RecordStatus.UNLOADED;
+                bank.markDirty();
+            }
         }
 
         if (clock.currentTick() % (Settings.trackIntervalTicks * 5L) == 0) checkBlocks(world, bank);
@@ -184,6 +202,10 @@ public final class PositionTracker {
         for (EntityRecord record : bank.all()) {
             if (present.contains(record.uuid) || !dimension.equals(record.dimension)) continue;
             if (record.status != RecordStatus.UNLOADED && record.status != RecordStatus.LOADED) continue;
+            if (record.flags.contains(Notes.WENT_THROUGH_PORTAL)) continue; // we know where it went
+            // Only trust "not there" within entity tracking range (CLAUDE.md 4.1d C).
+            if (client.player == null || client.player.squaredDistanceTo(record.x, record.y, record.z)
+                    > Settings.missingCheckRange * Settings.missingCheckRange) continue;
             if (homeAreaLoaded(world, record)) {
                 record.status = RecordStatus.MISSING;
                 bank.markDirty();
@@ -210,8 +232,9 @@ public final class PositionTracker {
                 }
                 continue;
             }
-            boolean present = world.getBlockEntity(pos) instanceof Inventory
-                    || world.getBlockState(pos).getBlock() instanceof EnderChestBlock;
+            BlockState state = world.getBlockState(pos);
+            boolean present = world.getBlockEntity(pos) instanceof Inventory || state.getBlock() instanceof EnderChestBlock;
+            if (present && checkBlockNotes(record, state, world)) bank.markDirty();
             RecordStatus next = present ? RecordStatus.LOADED : RecordStatus.LIKELY_DESTROYED;
             if (present) record.lastSeen = now;
             if (record.status != next) {
@@ -222,6 +245,103 @@ public final class PositionTracker {
                 bank.markDirty();
             }
         }
+    }
+
+    /** Drops near a vanished entity that match its contents or its own item: it was broken. */
+    private void matchDrops(ClientWorld world, MemoryBank bank) {
+        for (Iterator<Vanished> it = vanished.iterator(); it.hasNext(); ) {
+            Vanished v = it.next();
+            double r = Settings.dropRadius;
+            Box box = new Box(v.pos.x - r, v.pos.y - r, v.pos.z - r, v.pos.x + r, v.pos.y + r, v.pos.z + r);
+            boolean matched = !world.getEntitiesByClass(ItemEntity.class, box,
+                    item -> v.dropIds.contains(Registries.ITEM.getId(item.getStack().getItem()).toString())).isEmpty();
+            if (!matched) continue;
+            EntityRecord record = bank.get(v.uuid);
+            if (record != null && record.status != RecordStatus.LOADED) {
+                record.status = RecordStatus.LIKELY_DESTROYED;
+                record.flags.remove(Notes.WENT_THROUGH_PORTAL); // broken next to a portal, not through it
+                bank.markDirty();
+                EntityTrackerClient.LOGGER.info("{} {} likely destroyed (its items dropped where it vanished)", record.type, record.uuid);
+            }
+            it.remove();
+        }
+    }
+
+    /** What a broken container entity drops: its remembered contents and its own item. */
+    private static Set<String> dropIds(EntityRecord record, Entity entity) {
+        Set<String> ids = new HashSet<>();
+        for (ContainerRecord.SlotItem item : record.items) {
+            if (item.stack().isJsonObject() && item.stack().getAsJsonObject().has("id")) {
+                ids.add(item.stack().getAsJsonObject().get("id").getAsString());
+            }
+        }
+        Identifier type = Registries.ENTITY_TYPE.getId(entity.getType());
+        if (Registries.ITEM.containsId(type)) ids.add(type.toString()); // chest_minecart, oak_chest_boat...
+        if (entity instanceof AbstractDonkeyEntity) ids.add("minecraft:chest");
+        return ids;
+    }
+
+    /**
+     * A portal within a few blocks. Wider than the entity itself on purpose: a moving entity is
+     * drawn a few blocks behind its real position (interpolation), so when it is removed the
+     * client may still place it short of the portal it just entered.
+     */
+    private static boolean nearPortal(ClientWorld world, BlockPos pos) {
+        for (BlockPos p : BlockPos.iterate(pos.add(-4, -2, -4), pos.add(4, 3, 4))) {
+            Block b = world.getBlockState(p).getBlock();
+            if (b == Blocks.NETHER_PORTAL || b == Blocks.END_PORTAL || b == Blocks.END_GATEWAY) return true;
+        }
+        return false;
+    }
+
+    /** F (chest removed) and G (hints) for a loaded entity. Returns true if anything changed. */
+    private static boolean checkEntityNotes(EntityRecord record, Entity entity, ClientWorld world) {
+        boolean changed = record.flags.remove(Notes.WENT_THROUGH_PORTAL); // it's back
+        if (entity instanceof AbstractDonkeyEntity donkey && !donkey.hasChest() && record.hasSnapshot()) {
+            changed |= record.flags.add(Notes.CHEST_REMOVED); // its contents dropped when the chest came off
+        }
+        Set<String> hints = new LinkedHashSet<>();
+        if (entity instanceof HopperMinecartEntity) hints.add(Notes.MOVES_ITEMS);
+        if (entity instanceof AbstractMinecartEntity && world.getBlockState(entity.getBlockPos().down()).getBlock() instanceof HopperBlock) {
+            hints.add(Notes.OVER_HOPPER);
+        }
+        if (!hints.equals(record.hints)) {
+            record.hints = hints;
+            changed = true;
+        }
+        return changed;
+    }
+
+    /** E (different container now) and G (hints) for a present block container. */
+    private static boolean checkBlockNotes(BlockRecord record, BlockState state, ClientWorld world) {
+        boolean changed = false;
+        String now = Registries.BLOCK.getId(state.getBlock()).toString();
+        if (!family(now).equals(family(record.type))) changed = record.flags.add(Notes.CONTAINER_CHANGED);
+        Set<String> hints = new LinkedHashSet<>();
+        List<BlockPos> positions = new ArrayList<>();
+        positions.add(record.pos);
+        positions.addAll(record.otherPositions);
+        for (BlockPos p : positions) {
+            Block block = world.getBlockState(p).getBlock();
+            if (block instanceof AbstractFurnaceBlock || block instanceof BrewingStandBlock) hints.add(Notes.PROCESSES_ITEMS);
+            if (block instanceof HopperBlock) hints.add(Notes.MOVES_ITEMS);
+            if (world.getBlockState(p.down()).getBlock() instanceof HopperBlock) hints.add(Notes.HOPPER_BELOW);
+            for (Direction d : Direction.values()) {
+                BlockState n = world.getBlockState(p.offset(d));
+                // A hopper facing into this block (its output side points at p) feeds it.
+                if (n.getBlock() instanceof HopperBlock && n.get(HopperBlock.FACING) == d.getOpposite()) hints.add(Notes.FED_BY_HOPPER);
+            }
+        }
+        if (!hints.equals(record.hints)) {
+            record.hints = hints;
+            changed = true;
+        }
+        return changed;
+    }
+
+    /** Same container family: copper chests change id as they oxidise or get waxed. */
+    private static String family(String id) {
+        return id.replace("waxed_", "").replace("exposed_", "").replace("weathered_", "").replace("oxidized_", "");
     }
 
     private static boolean homeAreaLoaded(ClientWorld world, EntityRecord record) {

@@ -26,11 +26,11 @@ import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.screen.MountScreenHandler;
+import net.minecraft.screen.PlayerScreenHandler;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.text.Text;
 import net.minecraft.text.TranslatableTextContent;
-import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
@@ -86,7 +86,6 @@ public final class ScreenBinder {
             EntityTrackerClient.LOGGER.debug("Container screen {} ({}) opened, bound to {}", handler.syncId,
                     screen.getClass().getSimpleName(), bound == null ? null : bound.record.key());
             if (bound == null) return;
-            interactions.clear();
             bank.markDirty();
             current = bound;
             ScreenEvents.remove(screen).register(closed -> {
@@ -115,25 +114,53 @@ public final class ScreenBinder {
     }
 
     private @Nullable Bound bind(MinecraftClient client, ClientWorld world, MemoryBank bank, ScreenHandler handler, Text title) {
+        // The player's own inventory has 5 crafting slots, the same as a hopper minecart.
+        if (handler instanceof PlayerScreenHandler) return null;
+
         // Horses, donkeys, mules, llamas: the handler holds the entity itself.
         if (handler instanceof MountScreenHandler) {
             Entity mount = ((MountScreenHandlerAccessor) handler).entitytracker$getMount();
-            return mount instanceof AbstractDonkeyEntity donkey && donkey.hasChest() ? bindEntity(world, bank, handler, mount) : null;
+            if (!(mount instanceof AbstractDonkeyEntity donkey && donkey.hasChest())) return null;
+            interactions.consumeEntity(mount.getUuid());
+            return bindEntity(world, bank, handler, mount);
         }
 
+        // Generic screens don't say whose they are. Match recent clicks in order (the server
+        // answers them in order); an entity must also match the screen title. No click, no record.
         int containerSlots = containerSlotCount(handler);
-        var pendingBlock = interactions.freshBlock(Settings.bindTimeoutTicks);
-        if (pendingBlock != null) return bindBlock(world, bank, handler, pendingBlock.pos(), containerSlots, title);
-
-        // Minecarts and chest boats open a generic screen that doesn't say whose it is.
-        var pending = interactions.fresh(Settings.bindTimeoutTicks);
-        if (pending != null) {
-            Entity entity = world.getEntityById(pending.networkId());
-            return matches(entity, containerSlots) ? bindEntity(world, bank, handler, entity) : null;
+        List<InteractionTracker.Pending> fresh = interactions.fresh(Settings.bindTimeoutTicks);
+        InteractionTracker.Pending onlySlotMatch = null;
+        int slotMatches = 0;
+        for (InteractionTracker.Pending p : fresh) {
+            if (p.isEntity()) {
+                Entity entity = world.getEntityById(p.networkId());
+                if (!matches(entity, containerSlots) || !entity.getUuid().equals(p.uuid())) continue;
+                slotMatches++;
+                onlySlotMatch = p;
+                if (title.getString().equals(entity.getDisplayName().getString())) {
+                    interactions.consume(p);
+                    return bindEntity(world, bank, handler, entity);
+                }
+            } else {
+                Bound bound = bindBlock(world, bank, handler, p.pos(), containerSlots, title);
+                if (bound != null) {
+                    interactions.consume(p);
+                    return bound;
+                }
+            }
         }
-        // No fresh interaction: fall back to the entity under the crosshair.
-        if (client.crosshairTarget instanceof EntityHitResult hit && matches(hit.getEntity(), containerSlots)) {
-            return bindEntity(world, bank, handler, hit.getEntity());
+        // No title matched (a server or ViaVersion may show a different title): only safe when a
+        // single clicked entity fits the screen at all.
+        if (slotMatches == 1) {
+            Entity entity = world.getEntityById(onlySlotMatch.networkId());
+            EntityTrackerClient.LOGGER.info("Screen title \"{}\" didn't match {}; bound it as the only candidate",
+                    title.getString(), entity.getDisplayName().getString());
+            interactions.consume(onlySlotMatch);
+            return bindEntity(world, bank, handler, entity);
+        }
+        if (slotMatches > 1) {
+            EntityTrackerClient.LOGGER.info("Screen \"{}\" fits {} clicked entities and matches none by name; not recorded",
+                    title.getString(), slotMatches);
         }
         return null;
     }
@@ -256,6 +283,7 @@ public final class ScreenBinder {
         }
         record.items = items;
         record.slotCount = containerSlots;
+        record.flags.clear(); // a fresh look settles "chest removed", "container changed", portal
         record.lastOpened = System.currentTimeMillis();
         bank.markDirty();
         EntityTrackerClient.LOGGER.debug("Snapshot of {} {}: {} stacks in {} slots", record.type, record.key(),

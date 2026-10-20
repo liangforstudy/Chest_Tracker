@@ -160,6 +160,7 @@ public final class BankStorage {
                         for (EntityRecord r : old.all()) merged.mergeEntity(r);
                         for (BlockRecord r : old.allBlocks()) merged.mergeBlock(r);
                         old.accounts.forEach(merged.accounts::putIfAbsent);
+                        merged.playDays.addAll(old.playDays);
                         used.add(p.getFileName().toString());
                     } catch (Exception e) {
                         EntityTrackerClient.LOGGER.error("Could not read old bank {}; left as it is", p, e);
@@ -200,6 +201,9 @@ public final class BankStorage {
                 bank.putBlock(r);
             }
         }
+        if (root.has("playDays")) {
+            for (JsonElement e : root.getAsJsonArray("playDays")) bank.playDays.add(e.getAsString());
+        }
         if (root.has("lastAreaAction")) {
             java.util.List<String> keys = new java.util.ArrayList<>();
             for (JsonElement e : root.getAsJsonArray("lastAreaAction")) keys.add(e.getAsString());
@@ -230,6 +234,9 @@ public final class BankStorage {
             JsonArray lastArea = new JsonArray();
             for (String k : bank.lastAreaAction()) lastArea.add(k);
             root.add("lastAreaAction", lastArea);
+            JsonArray playDays = new JsonArray();
+            bank.playDays.forEach(playDays::add);
+            root.add("playDays", playDays);
 
             Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
             try (Writer writer = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {

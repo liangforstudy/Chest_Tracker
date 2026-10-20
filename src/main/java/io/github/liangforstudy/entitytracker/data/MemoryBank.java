@@ -1,8 +1,12 @@
 package io.github.liangforstudy.entitytracker.data;
 
+import io.github.liangforstudy.entitytracker.Settings;
 import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -10,6 +14,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -22,6 +27,11 @@ public final class MemoryBank {
     public final String server;
     /** Accounts seen on this server: UUID -> name, for labelling their ender chests. */
     public final Map<UUID, String> accounts = new LinkedHashMap<>();
+    /**
+     * Dates (yyyy-mm-dd) the player was on this server. Staleness counts these, not calendar
+     * days, so time away from the server doesn't age anything.
+     */
+    public final TreeSet<String> playDays = new TreeSet<>();
     /** The account currently playing, or null before one has joined. */
     public @Nullable UUID currentPlayer;
     private final Map<UUID, EntityRecord> entities = new LinkedHashMap<>();
@@ -36,6 +46,24 @@ public final class MemoryBank {
     public MemoryBank(String key, String server) {
         this.key = key;
         this.server = server;
+    }
+
+    public void markPlayedToday() {
+        if (playDays.add(LocalDate.now().toString())) markDirty();
+    }
+
+    /** Days played on this server after the day this time falls on. */
+    public int playDaysSince(long millis) {
+        String day = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate().toString();
+        return playDays.tailSet(day, false).size();
+    }
+
+    /**
+     * Not opened during the last {@link Settings#staleDays} days played here. Only means "not
+     * checked for a while": it may be safe in storage or gone; nothing urgent.
+     */
+    public boolean isStale(ContainerRecord r) {
+        return r.hasSnapshot() && !(r instanceof InventoryRecord) && playDaysSince(r.lastOpened) >= Settings.staleDays;
     }
 
     public @Nullable EntityRecord get(UUID uuid) {
