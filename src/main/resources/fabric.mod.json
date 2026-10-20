@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "${id}",
+  "version": "${version}",
+  "name": "${name}",
+  "description": "Remembers what's inside donkeys, llamas, chest minecarts and chest boats you open. Client-side only.",
+  "authors": ["liangforstudy"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["io.github.liangforstudy.entitytracker.EntityTrackerClient"]
+  },
+  "mixins": [
+    {
+      "config": "entitytracker.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": "${minecraft}"
+  }
+}

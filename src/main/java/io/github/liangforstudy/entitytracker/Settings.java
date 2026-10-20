@@ -1,0 +1,29 @@
+package io.github.liangforstudy.entitytracker;
+
+/**
+ * Tunables. Plain constants for now; they move to a config file once there is a config screen.
+ */
+public final class Settings {
+    /**
+     * How long after interacting with an entity a container screen may still be bound to it.
+     * CLAUDE.md suggests ~10 ticks; 9b9t ping can exceed a second, so this is wider. Binding
+     * also requires the slot count to match the entity's inventory, which keeps it safe.
+     */
+    public static int bindTimeoutTicks = 60;
+    /** Home area radius in chunks (1 = the 3x3 area around homeChunk). */
+    public static int homeRadiusChunks = 1;
+    /** An entity vanishing closer than this, followed by item drops, counts as likely destroyed. */
+    public static double destroyDistance = 16.0;
+    /** Ticks to wait for item drops after a nearby entity disappears. */
+    public static int dropWindowTicks = 10;
+    /** Ticks between position-tracking passes. */
+    public static int trackIntervalTicks = 20;
+    /** Ticks of quiet after a change before the bank is written. */
+    public static int saveDebounceTicks = 100;
+    /** Days a record stays in the trash (restorable) before it is forgotten. */
+    public static int trashDays = 7;
+    /** Daily backups to keep per bank. */
+    public static int backupsToKeep = 7;
+
+    private Settings() {}
+}
