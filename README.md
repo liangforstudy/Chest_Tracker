@@ -6,6 +6,7 @@ minecarts and chest boats**, as well as ordinary chests, barrels and other block
 everything you've seen, even nested shulker boxes and bundles, from anywhere.
 
 > Early development. It works, but expect rough edges and changes to the save format.
+> See the [roadmap](ROADMAP.md) for what's done and what's still to come.
 
 ## Features
 
