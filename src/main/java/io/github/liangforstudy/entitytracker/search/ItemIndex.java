@@ -95,6 +95,13 @@ public final class ItemIndex {
         return false;
     }
 
+    /** Search text for a single stack (trade offers); empty for an empty stack. */
+    public static String searchText(ItemStack stack) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (stack.isEmpty() || client.world == null) return "";
+        return searchText(stack, Item.TooltipContext.create(client.world), client);
+    }
+
     /** Tooltip lines cover custom name, lore, enchantments and effects; the id covers the rest. */
     private static String searchText(ItemStack stack, Item.TooltipContext context, MinecraftClient client) {
         StringBuilder sb = new StringBuilder(Registries.ITEM.getId(stack.getItem()).toString());

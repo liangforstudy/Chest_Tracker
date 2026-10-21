@@ -55,7 +55,7 @@ public final class Trash {
             if (inside) out.add(b);
         }
         for (EntityRecord e : bank.all()) {
-            if (!e.isTrashed() && dimension.equals(e.dimension) && area.overlapsHome(e)) out.add(e);
+            if (!e.isTrader() && !e.isTrashed() && dimension.equals(e.dimension) && area.overlapsHome(e)) out.add(e);
         }
         return out;
     }

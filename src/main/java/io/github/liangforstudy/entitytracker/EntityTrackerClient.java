@@ -9,6 +9,7 @@ import io.github.liangforstudy.entitytracker.track.BankManager;
 import io.github.liangforstudy.entitytracker.track.InteractionTracker;
 import io.github.liangforstudy.entitytracker.track.PositionTracker;
 import io.github.liangforstudy.entitytracker.track.ScreenBinder;
+import io.github.liangforstudy.entitytracker.track.TradeBinder;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -24,6 +25,7 @@ public class EntityTrackerClient implements ClientModInitializer {
     private static InteractionTracker interactions;
     private static BankManager banks;
     private static ScreenBinder screens;
+    private static TradeBinder trades;
     private static final ItemIndex index = new ItemIndex();
     private static HeadAliases headAliases;
 
@@ -34,6 +36,10 @@ public class EntityTrackerClient implements ClientModInitializer {
 
     public static ScreenBinder screens() {
         return screens;
+    }
+
+    public static TradeBinder trades() {
+        return trades;
     }
 
     public static BankManager banks() {
@@ -55,9 +61,11 @@ public class EntityTrackerClient implements ClientModInitializer {
         interactions = new InteractionTracker();
         PositionTracker positions = new PositionTracker(banks, interactions);
         screens = new ScreenBinder(interactions, banks, positions);
+        trades = new TradeBinder(interactions, banks, positions);
 
         positions.register();
         screens.register();
+        trades.register();
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             interactions.tick();

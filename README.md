@@ -20,7 +20,8 @@ everything you've seen, even nested shulker boxes and bundles, from anywhere.
   switch to.
 - **Deep search.** Item names, custom names, lore, enchantments (modded and datapack ones too),
   player heads by profile name or texture, and items inside shulkers and bundles, with the full path
-  (`Donkey "Pack" > Shulker "Tools" > Diamond Pickaxe`).
+  (`Donkey "Pack" > Shulker "Tools" > Diamond Pickaxe`). Typos are forgiven: when nothing matches
+  exactly, close matches are shown and marked as such ("dimond" finds diamonds).
 - **"On me".** Your own inventory (and the shulkers and bundles in it) is searched too, listed first,
   so the sword you're looking for doesn't hide in your pocket.
 - **Detail view.** Click any result to see the container's last known contents as an inventory
@@ -46,6 +47,15 @@ everything you've seen, even nested shulker boxes and bundles, from anywhere.
   thinks so; on a touch screen, use **Show warnings** in the row's menu. The detail view always
   shows the explanations. All texts live in `assets/entitytracker/lang/en_us.json`, so a resource
   pack can reword them.
+- **Villager trades.** Trade with a villager or wandering trader and its offers are remembered:
+  price, second price, what it sells, uses left. Search them in their own **Trades** screen (the
+  **Trades** tab at the top of the tracker screen), kept apart from your storage: "mending" finds every librarian selling it.
+  Villagers are followed like donkeys when they wander. Prices and stock show as last seen (another
+  player may have traded since; opening the villager again gets the real numbers), with
+  what changed since your previous look (price up or down, new offers, offers gone), and each
+  account keeps its own prices, since reputation and discounts are per player. A villager seen
+  with a higher level or another profession is flagged, as its offers are out of date. Wandering
+  traders can be hidden all at once, or put in the trash one by one when they've moved on.
 - **Trash for the cases it can't judge.** Mark single entries, a selection (Ctrl/Shift-click, or
   the **Select** button on touch screens) or a whole area destroyed (after a grief, say), with
   restore and undo.
@@ -63,6 +73,8 @@ everything you've seen, even nested shulker boxes and bundles, from anywhere.
 - Press **K** (rebindable in Controls), the **ET** button in your inventory, or type `/etracker` to
   open the tracker. Type to search, click a result for its detail view, right-click a row (or tap
   its **⋮**) for actions.
+- **Storage | Trades** tabs at the top switch between the two screens; `/offers [text]` (or `/etracker trades`), or bind
+  **Open trades** in Controls: the villager trades you've seen, e.g. `/offers mending`.
 - `/search <text>`: search from chat, nearest first.
 - `/search nearby <radius> [text]`: list or search containers around you.
 - `/etracker area here <radius>`: mark everything in an area as destroyed (for example after a

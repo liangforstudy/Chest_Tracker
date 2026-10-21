@@ -25,6 +25,7 @@ import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
+import net.minecraft.screen.MerchantScreenHandler;
 import net.minecraft.screen.MountScreenHandler;
 import net.minecraft.screen.PlayerScreenHandler;
 import net.minecraft.screen.ScreenHandler;
@@ -116,6 +117,8 @@ public final class ScreenBinder {
     private @Nullable Bound bind(MinecraftClient client, ClientWorld world, MemoryBank bank, ScreenHandler handler, Text title) {
         // The player's own inventory has 5 crafting slots, the same as a hopper minecart.
         if (handler instanceof PlayerScreenHandler) return null;
+        // Merchant screens have 3 slots, like a furnace clicked just before; TradeBinder handles them.
+        if (handler instanceof MerchantScreenHandler) return null;
 
         // Horses, donkeys, mules, llamas: the handler holds the entity itself.
         if (handler instanceof MountScreenHandler) {

@@ -32,6 +32,8 @@ public final class Settings {
     public static double dropRadius = 2.5;
     /** Days a record stays in the trash (restorable) before it is forgotten. */
     public static int trashDays = 7;
+    /** Remember villager and wandering trader offers (CLAUDE.md 4.11). */
+    public static boolean trackTrades = true;
     /** Daily backups to keep per bank. */
     public static int backupsToKeep = 7;
 

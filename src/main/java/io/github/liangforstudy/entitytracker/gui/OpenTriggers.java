@@ -27,9 +27,15 @@ public final class OpenTriggers {
         KeyBinding.Category category = KeyBinding.Category.create(Identifier.of("entitytracker", "main"));
         KeyBinding open = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.entitytracker.open",
                 InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_K, category));
+        // Unbound by default: the Trades button on the tracker screen is the main way in.
+        KeyBinding trades = KeyBindingHelper.registerKeyBinding(new KeyBinding("key.entitytracker.trades",
+                InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (open.wasPressed()) {
                 if (client.currentScreen == null && client.world != null) client.setScreen(new TrackerScreen());
+            }
+            while (trades.wasPressed()) {
+                if (client.currentScreen == null && client.world != null) client.setScreen(new TradesScreen());
             }
         });
 

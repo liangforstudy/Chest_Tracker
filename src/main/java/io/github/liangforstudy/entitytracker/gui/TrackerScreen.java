@@ -8,6 +8,7 @@ import io.github.liangforstudy.entitytracker.data.EntityRecord;
 import io.github.liangforstudy.entitytracker.data.InventoryRecord;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.data.RecordStatus;
+import io.github.liangforstudy.entitytracker.search.Fuzzy;
 import io.github.liangforstudy.entitytracker.search.ItemIndex;
 import io.github.liangforstudy.entitytracker.track.Trash;
 import net.minecraft.client.MinecraftClient;
@@ -56,6 +57,8 @@ public final class TrackerScreen extends Screen {
     private int tooltipX, tooltipY;
     private ResultList list;
     private boolean showDestroyed = true;
+    /** The results shown are close matches, not exact ones. */
+    private boolean fuzzy;
     /** false = remembered containers, true = the trash. */
     private boolean trashView;
     /** The open row menu (right-click or the row's "⋮"), empty when closed. */
@@ -79,6 +82,7 @@ public final class TrackerScreen extends Screen {
 
         list = new ResultList(client, width, height - 80, 50);
         addDrawableChild(list);
+        for (ButtonWidget tab : ScreenTabs.create(client, width, false)) addDrawableChild(tab);
 
         // Bottom bar: views and filters, or bulk actions while something is selected.
         menu.clear();
@@ -308,16 +312,34 @@ public final class TrackerScreen extends Screen {
     }
 
     private void refresh() {
+        String query = search.getText().trim().toLowerCase(Locale.ROOT);
+        if (query.startsWith("@")) query = query.substring(1); // @head:Notch until full filters (4.6)
+        fuzzy = false;
+        List<Row> rows = rows(query, false);
+        if (rows.isEmpty() && !query.isEmpty()) {
+            // Nothing exact: try close matches ("diamnd" -> diamond) and say so.
+            rows = rows(query, true);
+            fuzzy = !rows.isEmpty();
+        }
+        list.setRows(rows);
+    }
+
+    /** "close matches" next to the search field, when the results are fuzzy ones. */
+    static void drawFuzzyNote(DrawContext context, net.minecraft.client.font.TextRenderer tr, TextFieldWidget field) {
+        String note = Text.translatable("screen.entitytracker.close_matches").getString();
+        context.drawTextWithShadow(tr, note, field.getX() + field.getWidth() - tr.getWidth(note) - 6,
+                field.getY() + 6, 0xFFE8B04A);
+    }
+
+    private List<Row> rows(String query, boolean fuzzy) {
         List<Row> rows = new ArrayList<>();
         MemoryBank bank = EntityTrackerClient.banks().bank();
         if (bank != null) {
-            String query = search.getText().trim().toLowerCase(Locale.ROOT);
-            if (query.startsWith("@")) query = query.substring(1); // @head:Notch until full filters (4.6)
             List<ContainerRecord> records = new ArrayList<>();
             // Your own inventory first, so "it was on me all along" is the first thing you see.
             InventoryRecord onMe = trashView ? null : InventoryRecord.current();
             if (onMe != null) records.add(onMe);
-            records.addAll(bank.allRecords()
+            records.addAll(bank.containers()
                     .filter(r -> trashView ? r.isTrashed()
                             : !r.isTrashed() && (showDestroyed || r.status != RecordStatus.LIKELY_DESTROYED))
                     .sorted(Comparator.comparingDouble(TrackerScreen::sortDistance))
@@ -328,17 +350,19 @@ public final class TrackerScreen extends Screen {
                     rows.add(new Row(record, null, index.items(record).size()));
                 } else {
                     for (ItemIndex.IndexedItem item : index.items(record)) {
-                        if (item.searchText().contains(query)) rows.add(new Row(record, item, 0));
+                        if (fuzzy ? Fuzzy.matches(item.searchText(), query) : item.searchText().contains(query)) {
+                            rows.add(new Row(record, item, 0));
+                        }
                     }
                 }
                 if (rows.size() >= MAX_ROWS) break;
             }
         }
-        list.setRows(rows);
+        return rows;
     }
 
     /** Same dimension first, nearest first; other dimensions after. */
-    private static double sortDistance(ContainerRecord r) {
+    static double sortDistance(ContainerRecord r) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || client.world == null) return 0;
         if (r.dimension.equals(client.world.getRegistryKey().getValue().toString())) return client.player.squaredDistanceTo(r.x, r.y, r.z);
@@ -369,7 +393,8 @@ public final class TrackerScreen extends Screen {
         pendingTooltip = null;
         super.render(context, mouseX, mouseY, delta);
         if (pendingTooltip != null) drawExplanation(context, textRenderer, pendingTooltip, tooltipX, tooltipY);
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, 8, 0xFFFFFFFF);
+        ScreenTabs.drawUnderline(context, width, false);
+        if (fuzzy) drawFuzzyNote(context, textRenderer, search);
         if (EntityTrackerClient.banks().bank() == null) {
             context.drawCenteredTextWithShadow(textRenderer, Text.translatable("screen.entitytracker.no_bank"),
                     width / 2, height / 2, 0xFFAAAAAA);

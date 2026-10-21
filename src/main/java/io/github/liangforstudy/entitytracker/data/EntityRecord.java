@@ -2,6 +2,7 @@ package io.github.liangforstudy.entitytracker.data;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
@@ -15,9 +16,16 @@ public final class EntityRecord extends ContainerRecord {
     /** Set when a likely-destroyed entity was seen alive again. */
     public boolean reappeared;
     public int timesRehomed;
+    /** Set for villagers and wandering traders (CLAUDE.md 4.11); null for containers. */
+    public @Nullable TradeData trades;
 
     public EntityRecord(UUID uuid) {
         this.uuid = uuid;
+    }
+
+    /** A villager or wandering trader: shown in the Trades screen, not in storage. */
+    public boolean isTrader() {
+        return trades != null;
     }
 
     @Override
@@ -34,6 +42,7 @@ public final class EntityRecord extends ContainerRecord {
         o.add("homeChunk", home);
         if (reappeared) o.addProperty("reappeared", true);
         if (timesRehomed != 0) o.addProperty("timesRehomed", timesRehomed);
+        if (trades != null) o.add("trades", trades.toJson());
         return o;
     }
 
@@ -45,6 +54,7 @@ public final class EntityRecord extends ContainerRecord {
         r.homeChunkZ = home.get(1).getAsInt();
         r.reappeared = o.has("reappeared") && o.get("reappeared").getAsBoolean();
         r.timesRehomed = o.has("timesRehomed") ? o.get("timesRehomed").getAsInt() : 0;
+        if (o.has("trades")) r.trades = TradeData.fromJson(o.getAsJsonObject("trades"));
         return r;
     }
 }

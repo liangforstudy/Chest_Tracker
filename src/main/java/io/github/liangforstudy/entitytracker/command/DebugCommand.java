@@ -15,6 +15,7 @@ import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.gui.AreaConfirmScreen;
 import io.github.liangforstudy.entitytracker.gui.OpenTriggers;
 import io.github.liangforstudy.entitytracker.gui.TrackerScreen;
+import io.github.liangforstudy.entitytracker.gui.TradesScreen;
 import io.github.liangforstudy.entitytracker.track.BankManager;
 import io.github.liangforstudy.entitytracker.track.Trash;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -43,6 +44,10 @@ public final class DebugCommand {
                     OpenTriggers.openLater();
                     return 1;
                 })
+                .then(literal("trades").executes(ctx -> {
+                    OpenTriggers.openLater(new io.github.liangforstudy.entitytracker.gui.TradesScreen());
+                    return 1;
+                }))
                 .then(literal("bank").executes(ctx -> {
                     MemoryBank bank = banks.bank();
                     if (bank == null) return fail(ctx.getSource(), "No bank open");
@@ -139,7 +144,7 @@ public final class DebugCommand {
                     MemoryBank bank = banks.bank();
                     if (bank == null) return fail(ctx.getSource(), "No bank open");
                     var player = MinecraftClient.getInstance().player;
-                    List<ContainerRecord> records = bank.allRecords()
+                    List<ContainerRecord> records = bank.containers()
                             .sorted(Comparator.comparingDouble(r -> player == null ? 0
                                     : player.squaredDistanceTo(r.x, r.y, r.z)))
                             .toList();
@@ -148,6 +153,19 @@ public final class DebugCommand {
                     return records.size();
                 }))
                 .then(searchNode(banks, "search"))
+                // Testing only (dev client): open a trader's detail view (test tools can't click list rows).
+                .then(literal("debug").requires(src -> FabricLoader.getInstance().isDevelopmentEnvironment())
+                        .then(literal("trade").then(argument("name", StringArgumentType.greedyString()).executes(ctx -> {
+                            MemoryBank bank = banks.bank();
+                            if (bank == null) return fail(ctx.getSource(), "No bank open");
+                            String name = StringArgumentType.getString(ctx, "name").toLowerCase(java.util.Locale.ROOT);
+                            var trader = bank.traders().filter(r -> io.github.liangforstudy.entitytracker.gui.TradesScreen.label(r)
+                                    .toLowerCase(java.util.Locale.ROOT).contains(name)).findFirst().orElse(null);
+                            if (trader == null) return fail(ctx.getSource(), "No trader matches");
+                            OpenTriggers.openLater(new io.github.liangforstudy.entitytracker.gui.TradeDetailScreen(trader,
+                                    new io.github.liangforstudy.entitytracker.gui.TradesScreen(), ""));
+                            return 1;
+                        }))))
                 // Testing only (dev client): pretend containers within 8 blocks were last opened N days ago.
                 .then(literal("debug").requires(src -> FabricLoader.getInstance().isDevelopmentEnvironment()).then(literal("age").then(argument("days", IntegerArgumentType.integer(0, 365)).executes(ctx -> {
                     MemoryBank bank = banks.bank();
@@ -177,6 +195,16 @@ public final class DebugCommand {
         // Short alias. Client commands are handled before anything is sent, so a server /search
         // can't receive it by accident; another client mod's /search would clash, though.
         dispatcher.register(searchNode(banks, "search"));
+        // /offers [text]: the Trades screen, optionally already searching.
+        dispatcher.register(literal("offers")
+                .executes(ctx -> {
+                    OpenTriggers.openLater(new TradesScreen());
+                    return 1;
+                })
+                .then(argument("text", StringArgumentType.greedyString()).executes(ctx -> {
+                    OpenTriggers.openLater(new TradesScreen(StringArgumentType.getString(ctx, "text")));
+                    return 1;
+                })));
     }
 
     private static String describe(ContainerRecord r) {
@@ -216,7 +244,7 @@ public final class DebugCommand {
         int hits = 0;
         List<ContainerRecord> records = java.util.stream.Stream.concat(
                         java.util.stream.Stream.ofNullable(InventoryRecord.current()), // "On me" first
-                        bank.allRecords().filter(r -> !r.isTrashed()))
+                        bank.containers().filter(r -> !r.isTrashed()))
                 .filter(r -> radius <= 0 || (player != null && r.dimension.equals(dimension)
                         && !(r instanceof BlockRecord b && b.global)
                         && player.squaredDistanceTo(r.x, r.y, r.z) <= (double) radius * radius))

@@ -9,6 +9,10 @@ public final class Notes {
     public static final String CHEST_REMOVED = "chest_removed";
     public static final String CONTAINER_CHANGED = "container_changed";
     public static final String WENT_THROUGH_PORTAL = "went_through_portal";
+    /** A villager changed profession (lost its job and took another): its offers are new. */
+    public static final String PROFESSION_CHANGED = "profession_changed";
+    /** A villager levelled up since its offers were seen: it has new ones. */
+    public static final String LEVELED_UP = "leveled_up";
 
     // Hints: the contents may change on their own; recomputed while the container is loaded.
     public static final String HOPPER_BELOW = "hopper_below";
@@ -16,6 +20,8 @@ public final class Notes {
     public static final String PROCESSES_ITEMS = "processes_items";
     public static final String MOVES_ITEMS = "moves_items";
     public static final String OVER_HOPPER = "over_hopper";
+    /** Wandering traders leave by themselves after a while. */
+    public static final String LEAVES_BY_ITSELF = "leaves_by_itself";
 
     private Notes() {}
 }

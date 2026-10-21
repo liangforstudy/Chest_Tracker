@@ -173,6 +173,16 @@ public final class MemoryBank {
         return Stream.concat(entities.values().stream(), blocks.values().stream());
     }
 
+    /** Storage only: every record except villagers and wandering traders. */
+    public Stream<ContainerRecord> containers() {
+        return allRecords().filter(r -> !(r instanceof EntityRecord e && e.isTrader()));
+    }
+
+    /** Villagers and wandering traders (CLAUDE.md 4.11). */
+    public Stream<EntityRecord> traders() {
+        return entities.values().stream().filter(EntityRecord::isTrader);
+    }
+
     public int size() {
         return entities.size() + blocks.size();
     }

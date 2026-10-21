@@ -20,6 +20,8 @@ as they get built, and get added or removed as plans change. For what works toda
   explanation for every warning
 - Trash with restore and undo, area and multi-select actions
 - Safe binding on laggy servers; touch-friendly (PojavLauncher)
+- Villager and wandering trader offers in their own Trades screen: prices and stock as last seen,
+  changes since your previous look, per-account prices, level-up and profession warnings
 
 ## Next
 
@@ -33,8 +35,6 @@ as they get built, and get added or removed as plans change. For what works toda
 - Search filters (`@ench:mending`, `@in:donkey`, `@here`, ...)
 - Tracer lines from the crosshair to selected results
 - Named groups of containers ("Base 1", "Base 2") with per-group totals
-- Villager and wandering trader offers, searchable in their own Trades screen (prices, stock and
-  new offers change over time, so each shows when it was last seen)
 - Settings screen (via Mod Menu)
 - Testing on servers that use ViaVersion, and on a real modpack instance
 

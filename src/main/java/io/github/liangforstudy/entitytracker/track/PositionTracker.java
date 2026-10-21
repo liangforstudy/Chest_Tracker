@@ -22,6 +22,8 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.passive.AbstractDonkeyEntity;
+import net.minecraft.entity.passive.WanderingTraderEntity;
+import io.github.liangforstudy.entitytracker.data.TradeData;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.entity.vehicle.HopperMinecartEntity;
 import net.minecraft.inventory.Inventory;
@@ -105,7 +107,9 @@ public final class PositionTracker {
             record.timesRehomed++;
         }
         if (record.status == RecordStatus.LIKELY_DESTROYED) record.reappeared = true;
-        if (reappearing && record.isTrashed()) {
+        // Traders are trashed to hide them (a wandering trader that moved on), not because they
+        // seemed destroyed, so seeing one again doesn't bring it back.
+        if (reappearing && record.isTrashed() && !record.isTrader()) {
             // Marked destroyed but seen alive: it wasn't destroyed after all (CLAUDE.md 4.1 step 5).
             record.trashedAt = 0;
             record.reappeared = true;
@@ -301,6 +305,7 @@ public final class PositionTracker {
             changed |= record.flags.add(Notes.CHEST_REMOVED); // its contents dropped when the chest came off
         }
         Set<String> hints = new LinkedHashSet<>();
+        if (record.trades != null) changed |= checkTraderNotes(record.trades, record, entity, hints);
         if (entity instanceof HopperMinecartEntity) hints.add(Notes.MOVES_ITEMS);
         if (entity instanceof AbstractMinecartEntity && world.getBlockState(entity.getBlockPos().down()).getBlock() instanceof HopperBlock) {
             hints.add(Notes.OVER_HOPPER);
@@ -309,6 +314,21 @@ public final class PositionTracker {
             record.hints = hints;
             changed = true;
         }
+        return changed;
+    }
+
+    /**
+     * A villager seen with another profession or a higher level than when its offers were read:
+     * the remembered offers are out of date. The stored profession stays until it is opened again.
+     */
+    private static boolean checkTraderNotes(TradeData trades, EntityRecord record, Entity entity, Set<String> hints) {
+        if (entity instanceof WanderingTraderEntity) hints.add(Notes.LEAVES_BY_ITSELF);
+        if (trades.byAccount.isEmpty()) return false;
+        TradeData live = new TradeData();
+        TradeBinder.readVillager(live, entity);
+        boolean changed = false;
+        if (!java.util.Objects.equals(live.profession, trades.profession)) changed |= record.flags.add(Notes.PROFESSION_CHANGED);
+        else if (live.level > trades.level) changed |= record.flags.add(Notes.LEVELED_UP);
         return changed;
     }
 
