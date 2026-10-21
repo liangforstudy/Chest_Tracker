@@ -1,7 +1,7 @@
 # Entity Container Tracker
 
 A client-side Fabric mod that remembers what's inside the containers you open, including the ones
-most trackers somehow refuse to track: entities. **Donkeys, mules, llamas, chest minecarts, hopper
+most chest trackers somehow refuse to track: entities. **Donkeys, mules, llamas, chest minecarts, hopper
 minecarts and chest boats**, as well as ordinary chests, barrels and other block containers. Search
 everything you've seen, even nested shulker boxes and bundles, from anywhere.
 
