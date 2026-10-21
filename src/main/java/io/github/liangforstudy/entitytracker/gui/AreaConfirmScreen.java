@@ -76,6 +76,13 @@ public final class AreaConfirmScreen extends Screen {
         close();
     }
 
+    /** Darker than the vanilla backdrop, so grey text stays readable over a bright sky. */
+    @Override
+    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+        super.renderBackground(context, mouseX, mouseY, delta);
+        context.fill(0, 0, width, height, TrackerScreen.BACKDROP);
+    }
+
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);

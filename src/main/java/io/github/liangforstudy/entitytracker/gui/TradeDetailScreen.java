@@ -54,25 +54,29 @@ public final class TradeDetailScreen extends Screen {
         }
         for (TrackerScreen.Note note : TrackerScreen.notes(record)) line(note.text(), note.color());
         String explain = TrackerScreen.explain("trades.changes");
-        if (explain != null) line(explain, 0xFF8A8A8A);
+        if (explain != null) line(explain, 0xFFB0B0B0);
 
         int listY = 22 + header.size() * 11 + 6;
         OfferList list = new OfferList(client, width, height - listY - 32, listY);
         for (TradeView.ShownOffer o : TradeView.offers(record, s)) list.add(o);
         addDrawableChild(list);
 
-        int w = Math.min(100, (width - 40) / 4);
-        int x = width / 2 - (w * 4 + 12) / 2;
+        int w = Math.min(100, (width - 40) / 5);
+        int x = width / 2 - (w * 5 + 16) / 2;
         int y = height - 26;
         addDrawableChild(ButtonWidget.builder(Text.translatable("screen.entitytracker.detail.back"), b -> close())
                 .dimensions(x, y, w, 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.translatable("screen.entitytracker.detail.copy"), b -> copyCoords())
-                .dimensions(x + w + 4, y, w, 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.translatable(record.isTrashed()
-                ? "screen.entitytracker.restore" : "screen.entitytracker.mark_destroyed"), b -> toggleTrash())
+        addDrawableChild(ButtonWidget.builder(Text.translatable("screen.entitytracker.detail.copy_xyz"),
+                b -> TrackerScreen.copyCoords(client, record, true)).dimensions(x + w + 4, y, w, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.translatable("screen.entitytracker.detail.copy_xz"),
+                b -> TrackerScreen.copyCoords(client, record, false))
+                .tooltip(net.minecraft.client.gui.tooltip.Tooltip.of(Text.translatable("screen.entitytracker.detail.copy_xz_tip")))
                 .dimensions(x + (w + 4) * 2, y, w, 20).build());
-        addDrawableChild(ButtonWidget.builder(ScreenTexts.DONE, b -> client.setScreen(null))
+        addDrawableChild(ButtonWidget.builder(record.isTrashed()
+                ? Text.translatable("screen.entitytracker.restore") : TrackerScreen.markLabel(record), b -> toggleTrash())
                 .dimensions(x + (w + 4) * 3, y, w, 20).build());
+        addDrawableChild(ButtonWidget.builder(ScreenTexts.DONE, b -> client.setScreen(null))
+                .dimensions(x + (w + 4) * 4, y, w, 20).build());
     }
 
     /** Header text, wrapped to the screen width. */
@@ -89,16 +93,7 @@ public final class TradeDetailScreen extends Screen {
     }
 
     private String statusText() {
-        return Text.translatable("screen.entitytracker.status." + record.status.name().toLowerCase(java.util.Locale.ROOT)).getString();
-    }
-
-    private void copyCoords() {
-        String coords = Math.round(Math.floor(record.x)) + " " + Math.round(Math.floor(record.y)) + " " + Math.round(Math.floor(record.z));
-        client.keyboard.setClipboard(coords);
-        if (client.player != null) {
-            client.player.sendMessage(Text.translatable("screen.entitytracker.detail.copied", coords,
-                    Dimensions.displayName(record.dimension)), true);
-        }
+        return Text.translatable("screen.entitytracker.status." + TrackerScreen.statusId(record)).getString();
     }
 
     private void toggleTrash() {
@@ -112,6 +107,13 @@ public final class TradeDetailScreen extends Screen {
     @Override
     public void close() {
         client.setScreen(parent);
+    }
+
+    /** Darker than the vanilla backdrop, so grey text stays readable over a bright sky. */
+    @Override
+    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+        super.renderBackground(context, mouseX, mouseY, delta);
+        context.fill(0, 0, width, height, TrackerScreen.BACKDROP);
     }
 
     @Override

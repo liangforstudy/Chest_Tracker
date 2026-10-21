@@ -80,14 +80,13 @@ public final class TrackerScreen extends Screen {
         search.setChangedListener(q -> refresh());
         addDrawableChild(search);
 
-        list = new ResultList(client, width, height - 80, 50);
+        list = new ResultList(client, width, height - 30 - LIST_Y, LIST_Y);
         addDrawableChild(list);
         for (ButtonWidget tab : ScreenTabs.create(client, width, false)) addDrawableChild(tab);
 
         // Bottom bar: views and filters, or bulk actions while something is selected.
         menu.clear();
-        viewButton = addDrawableChild(ButtonWidget.builder(Text.translatable(trashView ? "screen.entitytracker.view_trash"
-                : "screen.entitytracker.view_active"), b -> {
+        viewButton = addDrawableChild(ButtonWidget.builder(trashLabel(), b -> {
             trashView = !trashView;
             clearSelection();
             clearAndInit();
@@ -119,6 +118,14 @@ public final class TrackerScreen extends Screen {
 
         setInitialFocus(search);
         refresh();
+    }
+
+    /** "Trash (3)" in the list, "<- Back to list" in the trash: a place to go, not a mode. */
+    private Text trashLabel() {
+        if (trashView) return Text.translatable("screen.entitytracker.trash_back");
+        MemoryBank bank = EntityTrackerClient.banks().bank();
+        long n = bank == null ? 0 : bank.containers().filter(ContainerRecord::isTrashed).count();
+        return Text.translatable("screen.entitytracker.trash_open", n);
     }
 
     private Text destroyedLabel() {
@@ -233,7 +240,7 @@ public final class TrackerScreen extends Screen {
                     client.setScreen(new DetailScreen(record, this, ""));
                 }));
             }
-            items.add(ButtonWidget.builder(Text.translatable("screen.entitytracker.mark_destroyed"), b -> act(() -> {
+            items.add(ButtonWidget.builder(markLabel(record), b -> act(() -> {
                 MemoryBank bank = EntityTrackerClient.banks().bank();
                 if (bank != null) Trash.trash(bank, record);
             })));
@@ -312,6 +319,7 @@ public final class TrackerScreen extends Screen {
     }
 
     private void refresh() {
+        if (viewButton != null) viewButton.setMessage(trashLabel());
         String query = search.getText().trim().toLowerCase(Locale.ROOT);
         if (query.startsWith("@")) query = query.substring(1); // @head:Notch until full filters (4.6)
         fuzzy = false;
@@ -395,6 +403,19 @@ public final class TrackerScreen extends Screen {
         if (pendingTooltip != null) drawExplanation(context, textRenderer, pendingTooltip, tooltipX, tooltipY);
         ScreenTabs.drawUnderline(context, width, false);
         if (fuzzy) drawFuzzyNote(context, textRenderer, search);
+        // Hint line under the search field: the trash, the selection, or how to select.
+        Text hint;
+        int hintColor = 0xFFB0B0B0;
+        if (trashView) {
+            hint = Text.translatable("screen.entitytracker.hint.trash", Settings.trashDays);
+            hintColor = 0xFFE8B04A;
+        } else if (selectMode || !selection.isEmpty()) {
+            hint = Text.translatable("screen.entitytracker.hint.selected", selection.size());
+            hintColor = 0xFF8FC8FF;
+        } else {
+            hint = Text.translatable("screen.entitytracker.hint.select");
+        }
+        context.drawCenteredTextWithShadow(textRenderer, hint, width / 2, 48, hintColor);
         if (EntityTrackerClient.banks().bank() == null) {
             context.drawCenteredTextWithShadow(textRenderer, Text.translatable("screen.entitytracker.no_bank"),
                     width / 2, height / 2, 0xFFAAAAAA);
@@ -402,6 +423,13 @@ public final class TrackerScreen extends Screen {
             context.drawCenteredTextWithShadow(textRenderer, Text.translatable("screen.entitytracker.no_results"),
                     width / 2, height / 2, 0xFFAAAAAA);
         }
+    }
+
+    /** Darker than the vanilla backdrop, so grey text stays readable over a bright sky. */
+    @Override
+    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+        super.renderBackground(context, mouseX, mouseY, delta);
+        context.fill(0, 0, width, height, TrackerScreen.BACKDROP);
     }
 
     @Override
@@ -526,7 +554,9 @@ public final class TrackerScreen extends Screen {
                 // while selecting, a click toggles the row; otherwise it opens the detail view.
                 if (click.x() >= getContentX() + getRowWidth() - 16) {
                     openMenu(row.record(), click.x(), click.y());
-                } else if (selecting && !(row.record() instanceof InventoryRecord)) {
+                } else if (selecting && row.record() instanceof InventoryRecord) {
+                    return true; // can't be selected; opening it here would leave the selection behind
+                } else if (selecting) {
                     int index = ResultList.this.children().indexOf(this);
                     if (shift && lastToggled >= 0) {
                         int from = Math.min(lastToggled, index), to = Math.max(lastToggled, index);
@@ -585,7 +615,7 @@ public final class TrackerScreen extends Screen {
             }
         } else {
             parts.add(place(r, false));
-            String status = Text.translatable("screen.entitytracker.status." + r.status.name().toLowerCase(Locale.ROOT)).getString();
+            String status = Text.translatable("screen.entitytracker.status." + statusId(r)).getString();
             boolean bad = r.status == RecordStatus.MISSING || r.status == RecordStatus.LIKELY_DESTROYED;
             parts.add(bad ? "\u26A0 " + status : status);
         }
@@ -629,10 +659,57 @@ public final class TrackerScreen extends Screen {
         return text.equals(key) || text.isBlank() ? null : text; // empty entry = no tooltip (yet)
     }
 
+    /**
+     * The status as shown: a mob (donkey, llama, villager...) that is likely destroyed "died";
+     * minecarts, boats and blocks stay "likely destroyed".
+     */
+    public static String statusId(ContainerRecord r) {
+        if (r.status == RecordStatus.LIKELY_DESTROYED && r instanceof EntityRecord e && isMob(e)) return "died";
+        // A broken shulker box keeps its contents and drops as an item: picked up, not destroyed.
+        if (r.status == RecordStatus.LIKELY_DESTROYED && r instanceof BlockRecord && r.type.endsWith("shulker_box")) return "picked_up";
+        return r.status.name().toLowerCase(Locale.ROOT);
+    }
+
+    /** "Mark dead" for a mob, "Mark destroyed" for everything else. */
+    public static Text markLabel(ContainerRecord r) {
+        return Text.translatable(r instanceof EntityRecord e && isMob(e) ? "screen.entitytracker.mark_dead"
+                : "screen.entitytracker.mark_destroyed");
+    }
+
+    /** Copies "x y z" (vanilla) or "x z" (Baritone goals) and says so in the action bar. */
+    public static void copyCoords(MinecraftClient client, ContainerRecord r, boolean withY) {
+        long x, y, z;
+        if (r instanceof BlockRecord b && !b.global) {
+            x = b.pos.getX();
+            y = b.pos.getY();
+            z = b.pos.getZ();
+        } else {
+            x = Math.round(Math.floor(r.x));
+            y = Math.round(Math.floor(r.y));
+            z = Math.round(Math.floor(r.z));
+        }
+        String coords = withY ? x + " " + y + " " + z : x + " " + z;
+        client.keyboard.setClipboard(coords);
+        if (client.player != null) {
+            client.player.sendMessage(Text.translatable("screen.entitytracker.detail.copied", coords,
+                    Dimensions.displayName(r.dimension)), true);
+        }
+    }
+
+    /** Backdrop drawn over the vanilla one by every tracker screen. */
+    static final int BACKDROP = 0x90000000;
+    /** Where the list starts: below the search field and its hint line. */
+    static final int LIST_Y = 60;
+
+    /** Animals and villagers, as opposed to minecarts and boats (which are MISC, like villagers). */
+    private static boolean isMob(EntityRecord e) {
+        return e.isTrader() || Registries.ENTITY_TYPE.get(Identifier.of(e.type)).getSpawnGroup() != net.minecraft.entity.SpawnGroup.MISC;
+    }
+
     /** Explanation of the status line (and the trash, if it is in there), or null. */
     public static @Nullable String statusExplain(ContainerRecord r) {
         if (r instanceof InventoryRecord || (r instanceof BlockRecord b && b.global)) return null;
-        String status = explain("status." + r.status.name().toLowerCase(Locale.ROOT));
+        String status = explain("status." + statusId(r));
         String trash = r.isTrashed() ? explain("in_trash", Settings.trashDays) : null;
         if (status == null) return trash;
         return trash == null ? status : status + "\n\n" + trash;

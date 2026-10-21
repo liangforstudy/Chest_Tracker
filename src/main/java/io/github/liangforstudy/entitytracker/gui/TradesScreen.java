@@ -72,13 +72,12 @@ public final class TradesScreen extends Screen {
         search.setChangedListener(q -> refresh());
         addDrawableChild(search);
 
-        list = new ResultList(client, width, height - 80, 50);
+        list = new ResultList(client, width, height - 30 - TrackerScreen.LIST_Y, TrackerScreen.LIST_Y);
         addDrawableChild(list);
         for (ButtonWidget tab : ScreenTabs.create(client, width, true)) addDrawableChild(tab);
 
         List<ButtonWidget.Builder> bar = List.of(
-                ButtonWidget.builder(Text.translatable(trashView ? "screen.entitytracker.view_trash"
-                        : "screen.entitytracker.view_active"), b -> {
+                ButtonWidget.builder(trashLabel(), b -> {
                     trashView = !trashView;
                     clearAndInit();
                 }),
@@ -146,6 +145,14 @@ public final class TradesScreen extends Screen {
         return rows;
     }
 
+    /** "Trash (3)" in the list, "<- Back to list" in the trash. */
+    private Text trashLabel() {
+        if (trashView) return Text.translatable("screen.entitytracker.trash_back");
+        MemoryBank bank = EntityTrackerClient.banks().bank();
+        long n = bank == null ? 0 : bank.traders().filter(EntityRecord::isTrashed).count();
+        return Text.translatable("screen.entitytracker.trash_open", n);
+    }
+
     private static Text wanderingLabel() {
         return Text.translatable(showWandering ? "screen.entitytracker.trades.wandering_shown"
                 : "screen.entitytracker.trades.wandering_hidden");
@@ -158,14 +165,14 @@ public final class TradesScreen extends Screen {
     /** Row menu: mark destroyed (to the trash, e.g. a wandering trader that left) or restore. */
     private void openMenu(EntityRecord record, double x, double y) {
         closeMenu();
-        ButtonWidget.Builder item = ButtonWidget.builder(Text.translatable(record.isTrashed()
-                ? "screen.entitytracker.restore" : "screen.entitytracker.mark_destroyed"), b -> {
+        ButtonWidget.Builder item = ButtonWidget.builder(record.isTrashed()
+                ? Text.translatable("screen.entitytracker.restore") : TrackerScreen.markLabel(record), b -> {
             closeMenu();
             MemoryBank bank = EntityTrackerClient.banks().bank();
             if (bank == null) return;
             if (record.isTrashed()) Trash.restore(bank, record);
             else Trash.trash(bank, record);
-            refresh();
+            clearAndInit(); // also updates the trash count
         });
         menuW = 120;
         menuH = 20;
@@ -220,6 +227,9 @@ public final class TradesScreen extends Screen {
         super.render(context, mouseX, mouseY, delta);
         ScreenTabs.drawUnderline(context, width, true);
         if (fuzzy) TrackerScreen.drawFuzzyNote(context, textRenderer, search);
+        context.drawCenteredTextWithShadow(textRenderer, trashView
+                ? Text.translatable("screen.entitytracker.hint.trash", io.github.liangforstudy.entitytracker.Settings.trashDays)
+                : Text.translatable("screen.entitytracker.hint.trades"), width / 2, 48, trashView ? 0xFFE8B04A : 0xFFB0B0B0);
         if (EntityTrackerClient.banks().bank() == null) {
             context.drawCenteredTextWithShadow(textRenderer, Text.translatable("screen.entitytracker.no_bank"),
                     width / 2, height / 2, 0xFFAAAAAA);
@@ -227,6 +237,13 @@ public final class TradesScreen extends Screen {
             context.drawCenteredTextWithShadow(textRenderer, Text.translatable(search.getText().isBlank() && !trashView
                     ? "screen.entitytracker.trades.none_yet" : "screen.entitytracker.no_results"), width / 2, height / 2, 0xFFAAAAAA);
         }
+    }
+
+    /** Darker than the vanilla backdrop, so grey text stays readable over a bright sky. */
+    @Override
+    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+        super.renderBackground(context, mouseX, mouseY, delta);
+        context.fill(0, 0, width, height, TrackerScreen.BACKDROP);
     }
 
     @Override

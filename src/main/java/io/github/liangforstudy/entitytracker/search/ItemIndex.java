@@ -105,6 +105,8 @@ public final class ItemIndex {
     /** Tooltip lines cover custom name, lore, enchantments and effects; the id covers the rest. */
     private static String searchText(ItemStack stack, Item.TooltipContext context, MinecraftClient client) {
         StringBuilder sb = new StringBuilder(Registries.ITEM.getId(stack.getItem()).toString());
+        // The type's own name too, so "shulker box" also finds one renamed "Kit".
+        sb.append('\n').append(stack.getItem().getName().getString());
         // Heads: profile name and texture (plus its alias) are searchable even after renaming,
         // as plain words and as head:<name> / headtex:<hash or alias>.
         HeadInfo head = HeadInfo.of(stack);

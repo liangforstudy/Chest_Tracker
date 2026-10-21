@@ -26,7 +26,7 @@ everything you've seen, even nested shulker boxes and bundles, from anywhere.
   so the sword you're looking for doesn't hide in your pocket.
 - **Detail view.** Click any result to see the container's last known contents as an inventory
   grid, with the matching items outlined. Tap a shulker or bundle to look inside it. Copy the
-  coordinates with one button.
+  coordinates as `x y z`, or as `x z` for Baritone goals.
 - **Across dimensions.** A Nether stash seen from the overworld shows where it lines up
   (`Nether (30, 99, 25) ≈ 244, 204 here`), and results are sorted by that distance. The scale comes
   from each dimension's own settings, so modded dimensions work too; the End isn't converted.
@@ -34,8 +34,9 @@ everything you've seen, even nested shulker boxes and bundles, from anywhere.
   away, so the mod tells you what it noticed and leaves the decision to you. Nothing is hidden or
   deleted automatically:
   - **missing:** you're close to where an entity should be, and it isn't there;
-  - **likely destroyed:** an animal was seen dying, or a container vanished next to you and its own
-    items dropped on the spot;
+  - **likely died** (animals and villagers) or **likely destroyed** (minecarts, boats, blocks): it
+    was seen dying, or vanished next to you and its own items dropped on the spot. A shulker box
+    that's gone is **likely picked up**, since it keeps its contents when broken;
   - **went through a portal**, **chest removed** (a donkey seen without its chest), **container
     changed** (another kind of container now stands where it was);
   - hints that contents may change on their own: a hopper below or feeding it, furnaces and
@@ -58,7 +59,7 @@ everything you've seen, even nested shulker boxes and bundles, from anywhere.
   traders can be hidden all at once, or put in the trash one by one when they've moved on.
 - **Trash for the cases it can't judge.** Mark single entries, a selection (Ctrl/Shift-click, or
   the **Select** button on touch screens) or a whole area destroyed (after a grief, say), with
-  restore and undo.
+  restore and undo. The **Trash (N)** button shows what's in it.
 - **Safe storage.** Memory is saved per server under `<game dir>/entity-tracker/`, outside
   `config/`, with atomic writes and daily backups. One server address can have several aliases
   (e.g. `9b9t.com` and `9b9t.org`).

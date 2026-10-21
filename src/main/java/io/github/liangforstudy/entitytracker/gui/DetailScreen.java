@@ -65,18 +65,23 @@ public final class DetailScreen extends Screen {
         if (top == null) top = new Level(TrackerScreen.label(record), decodeSlots());
         int buttonY = height - 26;
         boolean actions = !(record instanceof InventoryRecord);
-        int count = actions ? 4 : 2;
+        int count = actions ? 5 : 2;
         int w = Math.min(100, (width - 40) / count);
         int x = width / 2 - (w * count + 4 * (count - 1)) / 2;
         addDrawableChild(ButtonWidget.builder(Text.translatable("screen.entitytracker.detail.back"), b -> back())
                 .dimensions(x, buttonY, w, 20).build());
         x += w + 4;
         if (actions) {
-            addDrawableChild(ButtonWidget.builder(Text.translatable("screen.entitytracker.detail.copy"), b -> copyCoords())
+            addDrawableChild(ButtonWidget.builder(Text.translatable("screen.entitytracker.detail.copy_xyz"),
+                    b -> TrackerScreen.copyCoords(client, record, true)).dimensions(x, buttonY, w, 20).build());
+            x += w + 4;
+            addDrawableChild(ButtonWidget.builder(Text.translatable("screen.entitytracker.detail.copy_xz"),
+                    b -> TrackerScreen.copyCoords(client, record, false))
+                    .tooltip(net.minecraft.client.gui.tooltip.Tooltip.of(Text.translatable("screen.entitytracker.detail.copy_xz_tip")))
                     .dimensions(x, buttonY, w, 20).build());
             x += w + 4;
-            addDrawableChild(ButtonWidget.builder(Text.translatable(record.isTrashed()
-                    ? "screen.entitytracker.restore" : "screen.entitytracker.mark_destroyed"), b -> toggleTrash())
+            addDrawableChild(ButtonWidget.builder(record.isTrashed()
+                    ? Text.translatable("screen.entitytracker.restore") : TrackerScreen.markLabel(record), b -> toggleTrash())
                     .dimensions(x, buttonY, w, 20).build());
             x += w + 4;
         }
@@ -133,17 +138,6 @@ public final class DetailScreen extends Screen {
         client.setScreen(parent);
     }
 
-    private void copyCoords() {
-        String coords = record instanceof BlockRecord b && !b.global
-                ? b.pos.getX() + " " + b.pos.getY() + " " + b.pos.getZ()
-                : Math.round(Math.floor(record.x)) + " " + Math.round(Math.floor(record.y)) + " " + Math.round(Math.floor(record.z));
-        client.keyboard.setClipboard(coords);
-        if (client.player != null) {
-            client.player.sendMessage(Text.translatable("screen.entitytracker.detail.copied", coords,
-                    Dimensions.displayName(record.dimension)), true);
-        }
-    }
-
     private void toggleTrash() {
         MemoryBank bank = EntityTrackerClient.banks().bank();
         if (bank == null) return;
@@ -196,6 +190,13 @@ public final class DetailScreen extends Screen {
             if (mx >= sx && mx < sx + SLOT && my >= sy && my < sy + SLOT) return i;
         }
         return -1;
+    }
+
+    /** Darker than the vanilla backdrop, so grey text stays readable over a bright sky. */
+    @Override
+    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+        super.renderBackground(context, mouseX, mouseY, delta);
+        context.fill(0, 0, width, height, TrackerScreen.BACKDROP);
     }
 
     @Override
@@ -300,7 +301,7 @@ public final class DetailScreen extends Screen {
         for (String para : text.split("\n")) {
             if (para.isEmpty()) continue;
             for (var line : textRenderer.wrapLines(Text.literal(para), Math.min(320, width - 40))) {
-                context.drawCenteredTextWithShadow(textRenderer, line, cx, y, 0xFF8A8A8A);
+                context.drawCenteredTextWithShadow(textRenderer, line, cx, y, 0xFFB0B0B0);
                 y += 10;
             }
         }
@@ -317,7 +318,7 @@ public final class DetailScreen extends Screen {
             lines.add(TrackerScreen.where(record));
         } else {
             lines.add(TrackerScreen.place(record, true));
-            String status = Text.translatable("screen.entitytracker.status." + record.status.name().toLowerCase(Locale.ROOT)).getString();
+            String status = Text.translatable("screen.entitytracker.status." + TrackerScreen.statusId(record)).getString();
             boolean bad = record.status == RecordStatus.MISSING || record.status == RecordStatus.LIKELY_DESTROYED;
             lines.add((bad ? "⚠ " : "") + status + " · "
                     + Text.translatable("screen.entitytracker.seen_ago", TrackerScreen.age(record.lastSeen)).getString());

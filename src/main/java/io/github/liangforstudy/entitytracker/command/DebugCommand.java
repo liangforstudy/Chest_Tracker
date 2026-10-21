@@ -221,7 +221,7 @@ public final class DebugCommand {
                         + (((BlockRecord) r).otherPositions.isEmpty() ? "" : " (double)");
         boolean reappeared = r instanceof EntityRecord e && e.reappeared;
         return String.format("- %s [%s] %sm %s, %s, seen %s ago, opened %s | %s%s",
-                label, r.status, dist, r.dimension.replace("minecraft:", ""), place,
+                label, Text.translatable("screen.entitytracker.status." + TrackerScreen.statusId(r)).getString(), dist, r.dimension.replace("minecraft:", ""), place,
                 age(r.lastSeen), r.hasSnapshot() ? age(r.lastOpened) + " ago" : "never",
                 contents.isEmpty() ? "empty" : contents, (reappeared ? " (reappeared)" : "")
                         + (r.isTrashed() ? " (in trash " + age(r.trashedAt) + ")" : "")
