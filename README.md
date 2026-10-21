@@ -23,7 +23,7 @@ everything you've seen, even nested shulker boxes and bundles, from anywhere.
   (`Donkey "Pack" > Shulker "Tools" > Diamond Pickaxe`). Typos are forgiven: when nothing matches
   exactly, close matches are shown and marked as such ("dimond" finds diamonds).
 - **"On me".** Your own inventory (and the shulkers and bundles in it) is searched too, listed first,
-  so the sword you're looking for doesn't hide in your pocket.
+  so the sword you're looking for doesn't hide in your inventory.
 - **Detail view.** Click any result to see the container's last known contents as an inventory
   grid, with the matching items outlined. Tap a shulker or bundle to look inside it. Copy the
   coordinates as `x y z`, or as `x z` for Baritone goals.
