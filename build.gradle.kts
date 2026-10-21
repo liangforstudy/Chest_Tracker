@@ -53,6 +53,9 @@ java {
 }
 
 tasks {
+    // MIT requires the license text to travel with copies of the mod
+    jar { from(rootProject.file("LICENSE")) }
+
     processResources {
         fun MutableMap<String, String>.register(key: String, property: String) {
             val value: String = sc.properties[property]

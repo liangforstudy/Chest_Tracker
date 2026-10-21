@@ -3,12 +3,21 @@
   "id": "${id}",
   "version": "${version}",
   "name": "${name}",
-  "description": "Remembers what's inside donkeys, llamas, chest minecarts and chest boats you open. Client-side only.",
-  "authors": ["liangforstudy"],
+  "description": "Remembers what's inside the containers you open, including the ones most trackers skip: donkeys, llamas, minecarts and chest boats. Client-side only.",
+  "authors": [
+    "liangforstudy"
+  ],
+  "contact": {
+    "homepage": "https://github.com/liangforstudy/Chest_Tracker",
+    "sources": "https://github.com/liangforstudy/Chest_Tracker",
+    "issues": "https://github.com/liangforstudy/Chest_Tracker/issues"
+  },
   "license": "MIT",
   "environment": "client",
   "entrypoints": {
-    "client": ["io.github.liangforstudy.entitytracker.EntityTrackerClient"]
+    "client": [
+      "io.github.liangforstudy.entitytracker.EntityTrackerClient"
+    ]
   },
   "mixins": [
     {

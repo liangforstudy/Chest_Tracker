@@ -18,6 +18,7 @@ import io.github.liangforstudy.entitytracker.gui.TrackerScreen;
 import io.github.liangforstudy.entitytracker.track.BankManager;
 import io.github.liangforstudy.entitytracker.track.Trash;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
@@ -147,8 +148,8 @@ public final class DebugCommand {
                     return records.size();
                 }))
                 .then(searchNode(banks, "search"))
-                // Testing only: pretend containers within 8 blocks were last opened N days ago.
-                .then(literal("debug").then(literal("age").then(argument("days", IntegerArgumentType.integer(0, 365)).executes(ctx -> {
+                // Testing only (dev client): pretend containers within 8 blocks were last opened N days ago.
+                .then(literal("debug").requires(src -> FabricLoader.getInstance().isDevelopmentEnvironment()).then(literal("age").then(argument("days", IntegerArgumentType.integer(0, 365)).executes(ctx -> {
                     MemoryBank bank = banks.bank();
                     var player = MinecraftClient.getInstance().player;
                     if (bank == null || player == null) return fail(ctx.getSource(), "No bank open");
