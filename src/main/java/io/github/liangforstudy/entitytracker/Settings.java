@@ -34,6 +34,15 @@ public final class Settings {
     public static int trashDays = 7;
     /** Remember villager and wandering trader offers (CLAUDE.md 4.11). */
     public static boolean trackTrades = true;
+    /**
+     * How long each page of a villager's offer preview shows before the next two, in ticks
+     * (35 = 1.75 s). Stored as ticks; a settings screen may show it in seconds (1-2 s).
+     */
+    public static int tradePreviewTicks = 35;
+    /** Time per client tick spent building the search index in the background. */
+    public static long indexBudgetNanos = 1_000_000;
+    /** Time one search refresh may spend indexing what isn't ready yet; the rest follows next ticks. */
+    public static long searchBudgetNanos = 8_000_000;
     /** Daily backups to keep per bank. */
     public static int backupsToKeep = 7;
 

@@ -163,9 +163,8 @@ public final class TradeDetailScreen extends Screen {
                 boolean out = offer.offer().outOfStock();
                 item(context, offer.buy1(), x + 2, y + 1, mouseX, mouseY);
                 if (!offer.buy2().isEmpty()) item(context, offer.buy2(), x + 22, y + 1, mouseX, mouseY);
-                context.drawTextWithShadow(textRenderer, "→", x + 44, y + 5, 0xFFFFFFFF);
+                TradeView.tradeArrow(context, x + 42, y + 1, out);
                 item(context, offer.sell(), x + 56, y + 1, mouseX, mouseY);
-                if (out) TradeView.outOfStockMark(context, x + 56, y + 1);
 
                 int textX = x + 80;
                 int room = getRowWidth() - 84;

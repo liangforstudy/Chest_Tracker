@@ -213,31 +213,45 @@ public final class BankStorage {
         return bank;
     }
 
+    /** Saves right away on this thread (e.g. when the game is closing). */
     public void save(MemoryBank bank) {
-        Path file = bankFile(bank.key);
+        JsonObject root = snapshot(bank);
+        bank.clearDirty();
+        if (!write(bank.key, root, bank.size())) bank.markDirty();
+    }
+
+    /**
+     * The bank as JSON, taken on the game thread. Cheap: item data is shared, not copied (it's
+     * never changed in place), so the slow part, writing the file, can run on another thread.
+     */
+    public JsonObject snapshot(MemoryBank bank) {
+        JsonObject root = new JsonObject();
+        root.addProperty("formatVersion", FORMAT_VERSION);
+        root.addProperty("server", bank.server);
+        JsonObject accounts = new JsonObject();
+        bank.accounts.forEach((uuid, name) -> accounts.addProperty(uuid.toString(), name));
+        root.add("accounts", accounts);
+        JsonObject entities = new JsonObject();
+        for (EntityRecord r : bank.all()) entities.add(r.uuid.toString(), r.toJson());
+        root.add("entities", entities);
+        JsonArray blocks = new JsonArray();
+        for (BlockRecord r : bank.allBlocks()) blocks.add(r.toJson());
+        root.add("blocks", blocks);
+        JsonArray lastArea = new JsonArray();
+        for (String k : bank.lastAreaAction()) lastArea.add(k);
+        root.add("lastAreaAction", lastArea);
+        JsonArray playDays = new JsonArray();
+        bank.playDays.forEach(playDays::add);
+        root.add("playDays", playDays);
+        return root;
+    }
+
+    /** Writes a snapshot (backup, temp file, atomic rename). Safe off the game thread. */
+    public boolean write(String key, JsonObject root, int size) {
+        Path file = bankFile(key);
         try {
             Files.createDirectories(file.getParent());
-            backupIfNeeded(bank.key, file);
-
-            JsonObject root = new JsonObject();
-            root.addProperty("formatVersion", FORMAT_VERSION);
-            root.addProperty("server", bank.server);
-            JsonObject accounts = new JsonObject();
-            bank.accounts.forEach((uuid, name) -> accounts.addProperty(uuid.toString(), name));
-            root.add("accounts", accounts);
-            JsonObject entities = new JsonObject();
-            for (EntityRecord r : bank.all()) entities.add(r.uuid.toString(), r.toJson());
-            root.add("entities", entities);
-            JsonArray blocks = new JsonArray();
-            for (BlockRecord r : bank.allBlocks()) blocks.add(r.toJson());
-            root.add("blocks", blocks);
-            JsonArray lastArea = new JsonArray();
-            for (String k : bank.lastAreaAction()) lastArea.add(k);
-            root.add("lastAreaAction", lastArea);
-            JsonArray playDays = new JsonArray();
-            bank.playDays.forEach(playDays::add);
-            root.add("playDays", playDays);
-
+            backupIfNeeded(key, file);
             Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
             try (Writer writer = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
                 GSON.toJson(root, writer);
@@ -247,10 +261,11 @@ public final class BankStorage {
             } catch (AtomicMoveNotSupportedException e) {
                 Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
             }
-            bank.clearDirty();
-            EntityTrackerClient.LOGGER.info("Saved bank {} ({} entities) to {}", bank.key, bank.size(), file);
+            EntityTrackerClient.LOGGER.info("Saved bank {} ({} entities) to {}", key, size, file);
+            return true;
         } catch (IOException e) {
-            EntityTrackerClient.LOGGER.error("Failed to save bank {} to {}", bank.key, file, e);
+            EntityTrackerClient.LOGGER.error("Failed to save bank {} to {}", key, file, e);
+            return false;
         }
     }
 

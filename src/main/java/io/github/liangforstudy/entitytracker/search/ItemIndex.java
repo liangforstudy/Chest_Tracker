@@ -1,5 +1,6 @@
 package io.github.liangforstudy.entitytracker.search;
 
+import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 import io.github.liangforstudy.entitytracker.EntityTrackerClient;
 import io.github.liangforstudy.entitytracker.data.ContainerRecord;
@@ -20,6 +21,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import org.jetbrains.annotations.Nullable;
+
 /**
  * Decodes a record's stored items and flattens them, nested shulkers and bundles included, into
  * searchable entries. Cached per record until its snapshot changes.
@@ -37,30 +40,95 @@ public final class ItemIndex {
     private record Cached(long lastOpened, List<IndexedItem> items) {}
 
     private final Map<String, Cached> cache = new HashMap<>();
+    /**
+     * Expanded entries per distinct stack (its raw JSON), shared by every copy: a base full of
+     * identical shulkers decodes and builds tooltips once, not once per copy. Each copy still
+     * gets its own entries with its own slot, so duplicates stay separate results.
+     */
+    private final Map<JsonElement, List<IndexedItem>> expansions = new HashMap<>();
+    private static final int MAX_EXPANSIONS = 50_000;
 
+    /** A record being indexed a few slots at a time: entries so far and the next slot to do. */
+    private static final class Partial {
+        final long lastOpened;
+        final List<IndexedItem> items = new ArrayList<>();
+        int next;
+
+        Partial(long lastOpened) {
+            this.lastOpened = lastOpened;
+        }
+    }
+
+    private final Map<String, Partial> partial = new HashMap<>();
+
+    /** All of the record's items, indexing whatever is missing right now (commands, "On me"). */
     public List<IndexedItem> items(ContainerRecord record) {
+        return itemsWithin(record, Long.MAX_VALUE);
+    }
+
+    /**
+     * The record's items, indexing slot by slot until {@code deadline} (System.nanoTime). Returns
+     * null if the deadline came first; the next call carries on where this one stopped. One
+     * slot (a full shulker) takes about a millisecond, so a big chest never stalls a frame.
+     */
+    public @Nullable List<IndexedItem> itemsWithin(ContainerRecord record, long deadline) {
+        List<IndexedItem> cached = cachedItems(record);
+        if (cached != null) return cached;
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.world == null) return List.of();
+        if (expansions.size() > MAX_EXPANSIONS) expansions.clear();
+        Partial p = partial.get(record.key());
+        if (p == null || p.lastOpened != record.lastOpened) {
+            p = new Partial(record.lastOpened);
+            partial.put(record.key(), p);
+        }
+        List<ContainerRecord.SlotItem> slots = record.items;
+        while (p.next < slots.size()) {
+            if (System.nanoTime() >= deadline) return null;
+            ContainerRecord.SlotItem slot = slots.get(p.next++);
+            for (IndexedItem e : expansions.computeIfAbsent(slot.stack(), json -> expand(json, client))) {
+                p.items.add(new IndexedItem(e.stack(), slot.slot(), e.path(), e.searchText()));
+            }
+        }
+        partial.remove(record.key());
+        cache.put(record.key(), new Cached(record.lastOpened, p.items));
+        return p.items;
+    }
+
+    /** The record's items if already indexed for its current snapshot, else null (costs nothing). */
+    public @Nullable List<IndexedItem> cachedItems(ContainerRecord record) {
         Cached cached = cache.get(record.key());
-        if (cached != null && cached.lastOpened == record.lastOpened) return cached.items;
-        List<IndexedItem> items = build(record);
-        cache.put(record.key(), new Cached(record.lastOpened, items));
-        return items;
+        return cached != null && cached.lastOpened == record.lastOpened ? cached.items : null;
+    }
+
+    /**
+     * Indexes records that aren't indexed yet, stopping once {@code budgetNanos} is used up, so
+     * the game never stalls on a big memory (a freeze can get you killed). Returns how many
+     * records are still left.
+     */
+    public int warm(Iterable<? extends ContainerRecord> records, long budgetNanos) {
+        long end = System.nanoTime() + budgetNanos;
+        int left = 0;
+        for (ContainerRecord r : records) {
+            if (cachedItems(r) != null) continue;
+            if (System.nanoTime() >= end || itemsWithin(r, end) == null) left++;
+        }
+        return left;
     }
 
     public void clear() {
         cache.clear();
+        partial.clear();
+        expansions.clear();
     }
 
-    private static List<IndexedItem> build(ContainerRecord record) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    /** One stack and everything nested in it; slot -1 (filled in per copy). */
+    private static List<IndexedItem> expand(JsonElement json, MinecraftClient client) {
         List<IndexedItem> out = new ArrayList<>();
-        if (client.world == null) return out;
         var ops = client.world.getRegistryManager().getOps(JsonOps.INSTANCE);
         Item.TooltipContext context = Item.TooltipContext.create(client.world);
-        for (ContainerRecord.SlotItem slot : record.items) {
-            // Items that no longer decode (e.g. from a removed mod) are skipped here but stay on disk.
-            ItemStack.CODEC.parse(ops, slot.stack()).result()
-                    .ifPresent(stack -> add(out, stack, slot.slot(), List.of(), context, client, 0));
-        }
+        // Items that no longer decode (e.g. from a removed mod) are skipped here but stay on disk.
+        ItemStack.CODEC.parse(ops, json).result().ifPresent(stack -> add(out, stack, -1, List.of(), context, client, 0));
         return out;
     }
 

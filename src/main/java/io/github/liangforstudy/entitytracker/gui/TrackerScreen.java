@@ -59,6 +59,9 @@ public final class TrackerScreen extends Screen {
     private boolean showDestroyed = true;
     /** The results shown are close matches, not exact ones. */
     private boolean fuzzy;
+    /** Containers the current search couldn't look at yet (still being indexed). */
+    private int indexing;
+    private boolean waitingForBank;
     /** false = remembered containers, true = the trash. */
     private boolean trashView;
     /** The open row menu (right-click or the row's "⋮"), empty when closed. */
@@ -269,6 +272,21 @@ public final class TrackerScreen extends Screen {
         return x >= menuX && x < menuX + menuW && y >= menuY && y < menuY + menuH;
     }
 
+    /** While a search is still waiting for containers to be indexed, try again every tick. */
+    @Override
+    public void tick() {
+        super.tick();
+        // Still searching, or the bank just finished loading while the screen was open.
+        if (indexing > 0 || (waitingForBank && EntityTrackerClient.banks().bank() != null)) refreshKeepingScroll();
+        waitingForBank = EntityTrackerClient.banks().bank() == null;
+    }
+
+    private void refreshKeepingScroll() {
+        double scroll = list.getScrollY();
+        refresh();
+        list.setScrollY(scroll);
+    }
+
     @Override
     public boolean keyPressed(KeyInput input) {
         if (input.key() == GLFW.GLFW_KEY_ESCAPE) {
@@ -319,7 +337,9 @@ public final class TrackerScreen extends Screen {
     }
 
     private void refresh() {
+        long start = System.nanoTime();
         if (viewButton != null) viewButton.setMessage(trashLabel());
+        indexing = 0;
         String query = search.getText().trim().toLowerCase(Locale.ROOT);
         if (query.startsWith("@")) query = query.substring(1); // @head:Notch until full filters (4.6)
         fuzzy = false;
@@ -330,6 +350,8 @@ public final class TrackerScreen extends Screen {
             fuzzy = !rows.isEmpty();
         }
         list.setRows(rows);
+        long ms = (System.nanoTime() - start) / 1_000_000;
+        if (ms > 16) EntityTrackerClient.LOGGER.warn("Tracker search took {} ms (longer than a frame)", ms);
     }
 
     /** "close matches" next to the search field, when the results are fuzzy ones. */
@@ -353,11 +375,20 @@ public final class TrackerScreen extends Screen {
                     .sorted(Comparator.comparingDouble(TrackerScreen::sortDistance))
                     .toList());
             ItemIndex index = EntityTrackerClient.index();
+            long end = System.nanoTime() + Settings.searchBudgetNanos;
             for (ContainerRecord record : records) {
                 if (query.isEmpty()) {
-                    rows.add(new Row(record, null, index.items(record).size()));
+                    // Top-level stacks from the record itself: opening the screen indexes nothing.
+                    rows.add(new Row(record, null, record.items.size()));
                 } else {
-                    for (ItemIndex.IndexedItem item : index.items(record)) {
+                    // Not indexed yet: only within this refresh's budget; the rest next tick.
+                    List<ItemIndex.IndexedItem> items = record instanceof InventoryRecord
+                            ? index.items(record) : index.itemsWithin(record, end);
+                    if (items == null) {
+                        indexing++;
+                        continue;
+                    }
+                    for (ItemIndex.IndexedItem item : items) {
                         if (fuzzy ? Fuzzy.matches(item.searchText(), query) : item.searchText().contains(query)) {
                             rows.add(new Row(record, item, 0));
                         }
@@ -409,6 +440,9 @@ public final class TrackerScreen extends Screen {
         if (trashView) {
             hint = Text.translatable("screen.entitytracker.hint.trash", Settings.trashDays);
             hintColor = 0xFFE8B04A;
+        } else if (indexing > 0) {
+            hint = Text.translatable("screen.entitytracker.hint.indexing", indexing);
+            hintColor = 0xFFE8B04A;
         } else if (selectMode || !selection.isEmpty()) {
             hint = Text.translatable("screen.entitytracker.hint.selected", selection.size());
             hintColor = 0xFF8FC8FF;
@@ -417,7 +451,8 @@ public final class TrackerScreen extends Screen {
         }
         context.drawCenteredTextWithShadow(textRenderer, hint, width / 2, 48, hintColor);
         if (EntityTrackerClient.banks().bank() == null) {
-            context.drawCenteredTextWithShadow(textRenderer, Text.translatable("screen.entitytracker.no_bank"),
+            context.drawCenteredTextWithShadow(textRenderer, Text.translatable(EntityTrackerClient.banks().isLoading()
+                    ? "screen.entitytracker.loading" : "screen.entitytracker.no_bank"),
                     width / 2, height / 2, 0xFFAAAAAA);
         } else if (list.children().isEmpty()) {
             context.drawCenteredTextWithShadow(textRenderer, Text.translatable("screen.entitytracker.no_results"),

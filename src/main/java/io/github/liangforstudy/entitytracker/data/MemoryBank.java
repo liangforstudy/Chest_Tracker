@@ -202,7 +202,7 @@ public final class MemoryBank {
         return ++quietTicks >= debounceTicks;
     }
 
-    void clearDirty() {
+    public void clearDirty() {
         dirty = false;
         quietTicks = 0;
     }

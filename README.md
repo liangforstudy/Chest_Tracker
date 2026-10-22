@@ -61,7 +61,8 @@ everything you've seen, even nested shulker boxes and bundles, from anywhere.
   the **Select** button on touch screens) or a whole area destroyed (after a grief, say), with
   restore and undo. The **Trash (N)** button shows what's in it.
 - **Safe storage.** Memory is saved per server under `<game dir>/entity-tracker/`, outside
-  `config/`, with atomic writes and daily backups. One server address can have several aliases
+  `config/`, with atomic writes and daily backups. Loading, saving and building the search index
+  happen in the background, so even a huge base never freezes the game. One server address can have several aliases
   (e.g. `9b9t.com` and `9b9t.org`).
 - **High-ping aware.** Contents are only attributed to a container you actually clicked, matched in
   order and by name, so two minecarts clicked quickly on a laggy server each get their own

@@ -12,6 +12,10 @@ import net.minecraft.util.Formatting;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Opens the bank for the current server once the player exists, saves it after changes, and
@@ -20,6 +24,18 @@ import java.util.UUID;
 public final class BankManager {
     private final BankStorage storage;
     private @Nullable MemoryBank bank;
+    /**
+     * Loads and writes run here, one at a time and in order, so reading or writing a big bank
+     * never freezes the game, and a reconnect can't read a file that is still being written.
+     */
+    private final ExecutorService io = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "entitytracker-io");
+        t.setDaemon(true);
+        return t;
+    });
+    private @Nullable Future<BankStorage.LoadResult> loading;
+    private @Nullable String loadingAddress;
+    private @Nullable Future<?> lastWrite;
     private @Nullable String pendingWarning;
     private long ticks;
 
@@ -36,19 +52,38 @@ public final class BankManager {
     }
 
     public void tick(MinecraftClient client) {
-        if (bank == null && client.player != null && client.world != null) open(client);
+        if (bank == null && loading == null && client.player != null && client.world != null) startLoading(client);
+        if (loading != null && loading.isDone() && client.player != null) open(client);
         if (bank != null && ++ticks % 1200 == 0) bank.markPlayedToday(); // also catches playing past midnight
-        if (bank != null && bank.tickDebounce(Settings.saveDebounceTicks)) storage.save(bank);
+        if (bank != null && bank.tickDebounce(Settings.saveDebounceTicks)) saveInBackground();
         if (pendingWarning != null && client.player != null) {
             client.player.sendMessage(Text.literal(pendingWarning).formatted(Formatting.RED), false);
             pendingWarning = null;
         }
     }
 
+    /** True while the bank is being read from disk (the screens show "Loading memory..."). */
+    public boolean isLoading() {
+        return loading != null;
+    }
+
+    private void startLoading(MinecraftClient client) {
+        loadingAddress = serverName(client);
+        String server = storage.resolveServer(loadingAddress);
+        loading = io.submit(() -> storage.load(server));
+    }
+
     private void open(MinecraftClient client) {
-        String address = serverName(client);
-        String server = storage.resolveServer(address);
-        var result = storage.load(server);
+        String address = loadingAddress;
+        BankStorage.LoadResult result;
+        try {
+            result = loading.get();
+        } catch (Exception e) {
+            EntityTrackerClient.LOGGER.error("Loading the bank failed", e);
+            loading = null;
+            return;
+        }
+        loading = null;
         bank = result.bank();
         UUID me = client.player.getUuid();
         String myName = client.player.getName().getString();
@@ -78,16 +113,42 @@ public final class BankManager {
         return "unknown_server";
     }
 
+    /** Snapshot now (game thread), write in the background. */
+    private void saveInBackground() {
+        MemoryBank b = bank;
+        var root = storage.snapshot(b);
+        b.clearDirty();
+        int size = b.size();
+        lastWrite = io.submit(() -> {
+            // A failed write marks the bank dirty again so the next save retries.
+            if (!storage.write(b.key, root, size)) MinecraftClient.getInstance().execute(b::markDirty);
+        });
+    }
+
+    /** On disconnect: save in the background (the next load waits for it in the same queue). */
     public void close() {
         if (bank != null) {
-            if (bank.isDirty()) storage.save(bank);
+            if (bank.isDirty()) saveInBackground();
             EntityTrackerClient.LOGGER.info("Closed bank {}", bank.key);
         }
+        if (loading != null) loading.cancel(false);
+        loading = null;
         bank = null;
         pendingWarning = null;
     }
 
+    /** On game exit: save and wait until everything is on disk. */
+    public void closeAndWait() {
+        close();
+        Future<?> last = io.submit(() -> {});
+        try {
+            last.get(30, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            EntityTrackerClient.LOGGER.error("Waiting for the bank to be written failed", e);
+        }
+    }
+
     public void saveNow() {
-        if (bank != null) storage.save(bank);
+        if (bank != null) saveInBackground();
     }
 }

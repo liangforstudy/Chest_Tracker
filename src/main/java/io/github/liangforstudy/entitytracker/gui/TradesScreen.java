@@ -1,6 +1,7 @@
 package io.github.liangforstudy.entitytracker.gui;
 
 import io.github.liangforstudy.entitytracker.EntityTrackerClient;
+import io.github.liangforstudy.entitytracker.Settings;
 import io.github.liangforstudy.entitytracker.data.EntityRecord;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.data.TradeData;
@@ -34,8 +35,6 @@ public final class TradesScreen extends Screen {
     private static final int MAX_ROWS = 500;
     /** Width of the "price -> goods" icons at the end of an offer row. */
     private static final int STRIP_WIDTH = 72;
-    /** Space between preview columns, so two offers never read as one chain. */
-    private static final int STRIP_GAP = 10;
 
     private TextFieldWidget search;
     private ResultList list;
@@ -228,10 +227,11 @@ public final class TradesScreen extends Screen {
         ScreenTabs.drawUnderline(context, width, true);
         if (fuzzy) TrackerScreen.drawFuzzyNote(context, textRenderer, search);
         context.drawCenteredTextWithShadow(textRenderer, trashView
-                ? Text.translatable("screen.entitytracker.hint.trash", io.github.liangforstudy.entitytracker.Settings.trashDays)
+                ? Text.translatable("screen.entitytracker.hint.trash", Settings.trashDays)
                 : Text.translatable("screen.entitytracker.hint.trades"), width / 2, 48, trashView ? 0xFFE8B04A : 0xFFB0B0B0);
         if (EntityTrackerClient.banks().bank() == null) {
-            context.drawCenteredTextWithShadow(textRenderer, Text.translatable("screen.entitytracker.no_bank"),
+            context.drawCenteredTextWithShadow(textRenderer, Text.translatable(EntityTrackerClient.banks().isLoading()
+                    ? "screen.entitytracker.loading" : "screen.entitytracker.no_bank"),
                     width / 2, height / 2, 0xFFAAAAAA);
         } else if (list.children().isEmpty()) {
             context.drawCenteredTextWithShadow(textRenderer, Text.translatable(search.getText().isBlank() && !trashView
@@ -315,23 +315,19 @@ public final class TradesScreen extends Screen {
                     if (o.change() != null) notes.add(new TrackerScreen.Note(o.change(), o.changeColor(), null));
                 } else {
                     // Villager row: who / what it sells / where / notes, with a preview of its offers
-                    // (price -> goods, one column of two) at the end of the row.
+                    // (price -> goods, two at a time) at the end of the row. With more than two
+                    // they move up one step every Settings.tradePreviewTicks, like a ticker: 1-2, 2-3,
+                    // 3-1, ... Both slots stay filled and every offer moves the same way (up).
                     context.drawItem(traderIcon, x + 2, y + 3);
-                    int cols = row.offers().isEmpty() ? 0 : 1;
-                    int slots = cols * 2;
-                    boolean more = row.offers().size() > slots;
-                    int stripsX = x + getRowWidth() - 16 - cols * (STRIP_WIDTH + STRIP_GAP) + STRIP_GAP;
-                    for (int i = 0; i < Math.min(row.offers().size(), slots); i++) {
-                        int sx = stripsX + (i / 2) * (STRIP_WIDTH + STRIP_GAP);
-                        int sy = y + 3 + (i % 2) * 20;
-                        if (more && i == slots - 1) {
-                            context.drawTextWithShadow(textRenderer, Text.translatable("screen.entitytracker.trades.more",
-                                    row.offers().size() - slots + 1), sx + 4, sy + 4, 0xFFAAAAAA);
-                            break;
-                        }
-                        hoveredStack = strip(context, row.offers().get(i), sx, sy, mouseX, mouseY, hoveredStack);
+                    int n = row.offers().size();
+                    int stripsX = x + getRowWidth() - 16 - STRIP_WIDTH;
+                    int step = n <= 2 ? 0
+                            : (int) (EntityTrackerClient.interactions().currentTick() / Math.max(1, Settings.tradePreviewTicks) % n);
+                    for (int k = 0; k < Math.min(n, 2); k++) {
+                        TradeView.ShownOffer offer = row.offers().get((step + k) % n);
+                        hoveredStack = strip(context, offer, stripsX, y + 3 + k * 20, mouseX, mouseY, hoveredStack);
                     }
-                    if (cols > 0) maxWidth = stripsX - 8 - textX;
+                    if (n > 0) maxWidth = stripsX - 8 - textX;
                     String count = row.snapshot() == null ? Text.translatable("screen.entitytracker.never_opened").getString()
                             : Text.translatable(row.offers().size() == 1 ? "screen.entitytracker.trades.offer"
                                     : "screen.entitytracker.trades.offers", row.offers().size()).getString();
@@ -370,10 +366,8 @@ public final class TradesScreen extends Screen {
                 context.fill(sx - 3, sy - 1, sx + STRIP_WIDTH - 1, sy + 17, 0x30FFFFFF);
                 ItemStack h = stripItem(context, o.buy1(), sx, sy, mouseX, mouseY, hoveredSoFar);
                 if (!o.buy2().isEmpty()) h = stripItem(context, o.buy2(), sx + 20, sy, mouseX, mouseY, h);
-                context.drawTextWithShadow(textRenderer, "→", sx + 42, sy + 4, 0xFFFFFFFF);
-                h = stripItem(context, o.sell(), sx + 54, sy, mouseX, mouseY, h);
-                if (o.offer().outOfStock()) TradeView.outOfStockMark(context, sx + 54, sy);
-                return h;
+                TradeView.tradeArrow(context, sx + 40, sy, o.offer().outOfStock());
+                return stripItem(context, o.sell(), sx + 54, sy, mouseX, mouseY, h);
             }
 
             /** One icon of the trade strip, with its count; returns the stack if the mouse is on it. */

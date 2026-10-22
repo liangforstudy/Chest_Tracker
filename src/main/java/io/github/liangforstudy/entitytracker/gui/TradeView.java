@@ -9,6 +9,7 @@ import io.github.liangforstudy.entitytracker.data.TradeData;
 import io.github.liangforstudy.entitytracker.search.ItemIndex;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.ItemEnchantmentsComponent;
@@ -24,6 +25,8 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -71,9 +74,17 @@ final class TradeView {
         return Text.translatable("screen.entitytracker.other_account", name != null ? name : owner.toString().substring(0, 8)).getString();
     }
 
+    /** Decoded offers per snapshot; a new look at the villager is a new snapshot object. */
+    private static final Map<TradeData.Snapshot, List<ShownOffer>> CACHE = new WeakHashMap<>();
+
+    /** Decoding and tooltips are slow; cached so typing in the search never re-decodes a trading hall. */
     static List<ShownOffer> offers(EntityRecord r, @Nullable TradeData.Snapshot s) {
+        if (s == null) return List.of();
+        return CACHE.computeIfAbsent(s, snapshot -> decodeOffers(r, snapshot));
+    }
+
+    private static List<ShownOffer> decodeOffers(EntityRecord r, TradeData.Snapshot s) {
         List<ShownOffer> out = new ArrayList<>();
-        if (s == null) return out;
         for (TradeData.Offer o : s.offers) {
             ItemStack buy1 = decode(o.buy1()), buy2 = decode(o.buy2()), sell = decode(o.sell());
             String change = null;
@@ -123,10 +134,12 @@ final class TradeView {
         return ItemStack.CODEC.parse(client.world.getRegistryManager().getOps(JsonOps.INSTANCE), json).result().orElse(ItemStack.EMPTY);
     }
 
-    /** "Enchanted Book (Mending)" rather than just "Enchanted Book". */
+    /** "Enchanted Book (Mending)", "Iron Axe (Efficiency II)" rather than just the item name. */
     static String describe(ItemStack stack) {
         String name = stack.getName().getString();
+        // Books keep theirs as stored enchantments; tools and armour as enchantments.
         ItemEnchantmentsComponent stored = stack.get(DataComponentTypes.STORED_ENCHANTMENTS);
+        if (stored == null || stored.isEmpty()) stored = stack.get(DataComponentTypes.ENCHANTMENTS);
         if (stored == null || stored.isEmpty()) return name;
         List<String> enchants = new ArrayList<>();
         for (Object2IntMap.Entry<RegistryEntry<Enchantment>> e : stored.getEnchantmentEntries()) {
@@ -135,15 +148,16 @@ final class TradeView {
         return name + " (" + String.join(", ", enchants) + ")";
     }
 
+    private static final Identifier TRADE_ARROW = Identifier.ofVanilla("container/villager/trade_arrow");
+    private static final Identifier TRADE_ARROW_OUT_OF_STOCK = Identifier.ofVanilla("container/villager/trade_arrow_out_of_stock");
+
     /**
-     * A red X over the sold item of an offer that is out of stock. Drawn as two lines rather than
-     * the villager screen's sprite, whose grey backing would hide the item.
+     * The arrow between price and goods, as in the villager's own trade list: a red X when the
+     * offer is out of stock. {@code y} is the top of the 16px item row.
      */
-    static void outOfStockMark(DrawContext context, int x, int y) {
-        for (int i = 1; i < 14; i++) {
-            context.fill(x + i, y + i, x + i + 2, y + i + 2, 0xFFE03030);
-            context.fill(x + 15 - i - 1, y + i, x + 15 - i + 1, y + i + 2, 0xFFE03030);
-        }
+    static void tradeArrow(DrawContext context, int x, int y, boolean outOfStock) {
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, outOfStock ? TRADE_ARROW_OUT_OF_STOCK : TRADE_ARROW,
+                x, y + 4, 10, 9);
     }
 
     /** "12 Emerald + 1 Book" */

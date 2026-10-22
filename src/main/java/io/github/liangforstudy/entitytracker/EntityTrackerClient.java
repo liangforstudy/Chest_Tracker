@@ -71,6 +71,10 @@ public class EntityTrackerClient implements ClientModInitializer {
             interactions.tick();
             banks.tick(client);
             positions.tick(client);
+            // Build the search index a little at a time (1 ms per tick), so opening the
+            // tracker and searching are instant and never freeze the game.
+            var bank = banks.bank();
+            if (bank != null && client.world != null) index.warm(bank.containers()::iterator, Settings.indexBudgetNanos);
         });
         // DISCONNECT fires on the network thread; do the bank work on the game thread.
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(() -> {
@@ -78,7 +82,7 @@ public class EntityTrackerClient implements ClientModInitializer {
             banks.close();
             index.clear();
         }));
-        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> banks.close());
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> banks.closeAndWait());
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 DebugCommand.register(dispatcher, banks));
 
