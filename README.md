@@ -1,11 +1,13 @@
 # Entity Container Tracker
 
 A client-side Fabric mod that remembers what's inside the containers you open, including the ones
-most chest trackers somehow refuse to track: **entities such as Donkeys, mules, llamas, chest minecarts, hopper
-minecarts and chest boats** are **now being tracked** especially **villager offers** if any, are in the world, as well as ordinary chests, barrels and other block containers. Search
-everything you've seen, even nested shulker boxes and bundles, from anywhere.
+most chest trackers somehow refuse to track: **entities**. Donkeys, mules, llamas, chest minecarts,
+hopper minecarts and chest boats are all tracked, as well as ordinary chests, barrels and other
+block containers. Search everything you've seen, even nested shulker boxes and bundles, from
+anywhere.
 
-**villager trades** are also tracked in this mod.
+It also remembers **villager trades**: the offers of every villager and wandering trader you trade
+with, searchable in their own screen.
 
 > Early development. It works, but expect rough edges and changes to the save format.
 > See the [roadmap](ROADMAP.md) for what's done and what's still to come.
