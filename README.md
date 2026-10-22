@@ -1,9 +1,11 @@
 # Entity Container Tracker
 
 A client-side Fabric mod that remembers what's inside the containers you open, including the ones
-most trackers somehow refuse to track: entities. **Donkeys, mules, llamas, chest minecarts, hopper
-minecarts and chest boats**, as well as ordinary chests, barrels and other block containers. Search
+most chest trackers somehow refuse to track: **entities such as Donkeys, mules, llamas, chest minecarts, hopper
+minecarts and chest boats** are **now being tracked** especially **villager offers** if any, are in the world, as well as ordinary chests, barrels and other block containers. Search
 everything you've seen, even nested shulker boxes and bundles, from anywhere.
+
+**villager trades** are also tracked in this mod.
 
 > Early development. It works, but expect rough edges and changes to the save format.
 > See the [roadmap](ROADMAP.md) for what's done and what's still to come.
@@ -23,7 +25,7 @@ everything you've seen, even nested shulker boxes and bundles, from anywhere.
   (`Donkey "Pack" > Shulker "Tools" > Diamond Pickaxe`). Typos are forgiven: when nothing matches
   exactly, close matches are shown and marked as such ("dimond" finds diamonds).
 - **"On me".** Your own inventory (and the shulkers and bundles in it) is searched too, listed first,
-  so the sword you're looking for doesn't hide in your pocket.
+  so the sword you're looking for doesn't hide in your inventory.
 - **Detail view.** Click any result to see the container's last known contents as an inventory
   grid, with the matching items outlined. Tap a shulker or bundle to look inside it. Copy the
   coordinates as `x y z`, or as `x z` for Baritone goals.

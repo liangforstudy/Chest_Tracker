@@ -42,4 +42,4 @@ as they get built, and get added or removed as plans change. For what works toda
 
 - Show remembered ender chest contents in ShulkerBoxTooltip previews
 - A simple top-down map of remembered containers without JourneyMap
-- Support for older Minecraft versions
+- Support for older and newer Minecraft versions
