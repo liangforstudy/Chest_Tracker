@@ -64,7 +64,7 @@ public final class BankStorage {
 
     /**
      * Maps a server-list address to the name its bank is stored under. Addresses listed together
-     * in server-aliases.json share one bank, e.g. 9b9t.com and 9b9t.org are the same server.
+     * in server-aliases.json share one bank, e.g. 9b9t.com, 9b9t.org and 2b2t.com are the same server.
      */
     public String resolveServer(String address) {
         String normalized = normalizeAddress(address);
@@ -75,6 +75,17 @@ public final class BankStorage {
             }
         }
         return normalized;
+    }
+
+    /** Every address that shares the bank called {@code server}, including the name itself. */
+    public List<String> addressesFor(String server) {
+        List<String> out = new ArrayList<>();
+        out.add(server);
+        JsonElement group = loadAliases().get(server);
+        if (group != null && group.isJsonArray()) {
+            for (JsonElement alias : group.getAsJsonArray()) out.add(normalizeAddress(alias.getAsString()));
+        }
+        return out;
     }
 
     static String normalizeAddress(String address) {
@@ -93,18 +104,40 @@ public final class BankStorage {
                 JsonArray nineB = new JsonArray();
                 nineB.add("9b9t.com");
                 nineB.add("9b9t.org");
+                // 2b2t.com redirects to 9b9t (the real 2b2t is 2b2t.org, which stays separate).
+                nineB.add("2b2t.com");
                 defaults.add("9b9t", nineB);
                 Files.writeString(file, GSON.toJson(defaults), StandardCharsets.UTF_8);
                 return defaults;
             }
+            JsonObject aliases;
             try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-                return JsonParser.parseReader(reader).getAsJsonObject();
+                aliases = JsonParser.parseReader(reader).getAsJsonObject();
             }
+            // Files written before 2b2t.com was a default: add it to the 9b9t group once, unless
+            // the player already put it somewhere else.
+            if (aliases.get("9b9t") instanceof JsonArray nineB && !mentions(aliases, "2b2t.com")) {
+                nineB.add("2b2t.com");
+                Files.writeString(file, GSON.toJson(aliases), StandardCharsets.UTF_8);
+                EntityTrackerClient.LOGGER.info("Added 2b2t.com to the 9b9t group in {}", file);
+            }
+            return aliases;
         } catch (Exception e) {
             // A broken alias file must not stop the bank from opening; it just opens unaliased.
             EntityTrackerClient.LOGGER.error("Could not read {}, ignoring aliases", file, e);
             return new JsonObject();
         }
+    }
+
+    private static boolean mentions(JsonObject aliases, String address) {
+        for (Map.Entry<String, JsonElement> group : aliases.entrySet()) {
+            if (normalizeAddress(group.getKey()).equals(address)) return true;
+            if (!group.getValue().isJsonArray()) continue;
+            for (JsonElement alias : group.getValue().getAsJsonArray()) {
+                if (normalizeAddress(alias.getAsString()).equals(address)) return true;
+            }
+        }
+        return false;
     }
 
     public record LoadResult(MemoryBank bank, String reason, @Nullable String warning) {}

@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -192,9 +193,10 @@ public final class DebugCommand {
                     ctx.getSource().sendFeedback(Text.literal("Aged " + n + " containers"));
                     return n;
                 }))))
-                // Chest Tracker memories: list the files found, or import one into this server's bank.
+                // Chest Tracker memories: list the files found, or import one (or all of this server's) into its bank.
                 .then(literal("import")
-                        .executes(ctx -> listImports(ctx.getSource()))
+                        .executes(ctx -> listImports(ctx.getSource(), banks))
+                        .then(literal("all").executes(ctx -> importAll(ctx.getSource(), banks)))
                         .then(argument("file", StringArgumentType.string())
                                 .suggests((ctx, builder) -> {
                                     for (Path p : ChestTrackerImport.findFiles(FabricLoader.getInstance().getGameDir())) {
@@ -311,7 +313,7 @@ public final class DebugCommand {
         return found.size();
     }
 
-    private static int listImports(FabricClientCommandSource source) {
+    private static int listImports(FabricClientCommandSource source, BankManager banks) {
         Path gameDir = FabricLoader.getInstance().getGameDir();
         Path importDir = ChestTrackerImport.importDir(gameDir);
         try {
@@ -324,63 +326,113 @@ public final class DebugCommand {
             return fail(source, "No Chest Tracker files found. Copy the .nbt file into " + importDir
                     + " and run /etracker import again.");
         }
+        MemoryBank bank = banks.bank();
         source.sendFeedback(Text.literal(files.size() + " Chest Tracker files (import with /etracker import <file>):"));
-        for (Path p : files) source.sendFeedback(Text.literal("- " + p.getFileName() + "  (" + gameDir.relativize(p) + ")"));
+        for (Path p : files) {
+            String mark = bank != null && fromServer(banks, bank, p) ? "  [this server]" : "";
+            source.sendFeedback(Text.literal("- " + p.getFileName() + "  (" + gameDir.relativize(p) + ")" + mark));
+        }
+        if (bank != null && files.stream().filter(p -> fromServer(banks, bank, p)).count() > 1) {
+            source.sendFeedback(Text.literal("/etracker import all imports every [this server] file at once; the newest memory of each container wins."));
+        }
         return files.size();
     }
 
     /**
-     * Reads the file in the background and merges it on the game thread. A file named after
-     * another server needs {@code confirm}, since an import can't be undone in one step.
+     * A file named after another server needs {@code confirm}, since an import can't be undone
+     * in one step. Files named after any address of this server (server-aliases.json) don't.
      */
     private static int importFile(FabricClientCommandSource source, BankManager banks, String name, boolean confirmed) {
         MemoryBank bank = banks.bank();
-        var client = MinecraftClient.getInstance();
-        if (bank == null || client.world == null) return fail(source, "No bank open");
+        if (bank == null || MinecraftClient.getInstance().world == null) return fail(source, "No bank open");
         Path gameDir = FabricLoader.getInstance().getGameDir();
         Path file = ChestTrackerImport.findFiles(gameDir).stream()
                 .filter(p -> p.getFileName().toString().equals(name) || p.getFileName().toString().equals(name + ".nbt"))
                 .findFirst().orElse(null);
         if (file == null) return fail(source, "No Chest Tracker file called " + name + "; /etracker import lists them");
-        String stem = file.getFileName().toString().replaceFirst("(?i)\\.nbt$", "");
-        if (!confirmed && !simplify(stem).equals(simplify(bank.server))) {
-            return fail(source, "This file looks like it's from \"" + stem + "\", but you're on \"" + bank.server
+        if (!confirmed && !fromServer(banks, bank, file)) {
+            return fail(source, "This file looks like it's from \"" + stem(file) + "\", but you're on \"" + bank.server
                     + "\". Run /etracker import " + StringArgumentType.escapeIfRequired(name)
                     + " confirm to import it here anyway.");
         }
+        return importFiles(source, banks, bank, List.of(file));
+    }
+
+    /** Every file named after one of this server's addresses, merged together: the newest memory of each container wins. */
+    private static int importAll(FabricClientCommandSource source, BankManager banks) {
+        MemoryBank bank = banks.bank();
+        if (bank == null || MinecraftClient.getInstance().world == null) return fail(source, "No bank open");
+        List<Path> files = ChestTrackerImport.findFiles(FabricLoader.getInstance().getGameDir()).stream()
+                .filter(p -> fromServer(banks, bank, p)).toList();
+        if (files.isEmpty()) {
+            return fail(source, "No Chest Tracker files for " + bank.server + " (addresses: "
+                    + String.join(", ", banks.storage().addressesFor(bank.server)) + "); /etracker import lists them");
+        }
+        return importFiles(source, banks, bank, files);
+    }
+
+    /** Reads the files in the background and merges them on the game thread. */
+    private static int importFiles(FabricClientCommandSource source, BankManager banks, MemoryBank bank, List<Path> files) {
+        var client = MinecraftClient.getInstance();
         var registries = client.world.getRegistryManager();
-        source.sendFeedback(Text.literal("Importing " + file.getFileName() + " into " + bank.server + "..."));
+        String names = files.stream().map(p -> p.getFileName().toString()).collect(Collectors.joining(", "));
+        source.sendFeedback(Text.literal("Importing " + names + " into " + bank.server + "..."));
         CompletableFuture.supplyAsync(() -> {
-            try {
-                return ChestTrackerImport.read(file, registries);
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
+            List<ChestTrackerImport.Result> results = new ArrayList<>();
+            for (Path file : files) {
+                try {
+                    results.add(ChestTrackerImport.read(file, registries));
+                } catch (IOException e) {
+                    throw new UncheckedIOException("Could not read " + file.getFileName(), e);
+                }
             }
-        }).whenComplete((result, error) -> client.execute(() -> {
+            return results;
+        }).whenComplete((results, error) -> client.execute(() -> {
             if (error != null) {
-                EntityTrackerClient.LOGGER.error("Chest Tracker import of {} failed", file, error);
-                source.sendError(Text.literal("Could not read " + file.getFileName() + ": " + error.getCause()));
+                EntityTrackerClient.LOGGER.error("Chest Tracker import of {} failed", names, error);
+                source.sendError(Text.literal("Import failed, nothing was changed: " + error.getCause().getMessage()));
                 return;
             }
             if (banks.bank() != bank) {
                 source.sendError(Text.literal("Import cancelled: you left " + bank.server + " while it was reading"));
                 return;
             }
-            ChestTrackerImport.MergeResult merged = ChestTrackerImport.merge(bank, result.records(), bank.currentPlayer);
+            // All files go in as one list: merge keeps whichever memory of a container is newest,
+            // whatever the order the files were read in.
+            List<BlockRecord> records = new ArrayList<>();
+            int items = 0, raw = 0, skipped = 0, otherVersion = 0;
+            for (ChestTrackerImport.Result r : results) {
+                records.addAll(r.records());
+                items += r.items();
+                raw += r.rawItems();
+                skipped += r.skipped();
+                if (ChestTrackerImport.otherVersion(r)) otherVersion = r.dataVersion();
+            }
+            ChestTrackerImport.MergeResult merged = ChestTrackerImport.merge(bank, records, bank.currentPlayer);
             source.sendFeedback(Text.literal("Imported from Chest Tracker: " + merged.added() + " new, "
-                    + merged.replaced() + " updated, " + merged.keptNewer() + " kept (already remembered with newer contents). "
-                    + result.items() + " stacks. The original file was not changed."));
-            if (result.rawItems() > 0) {
-                source.sendFeedback(Text.literal(result.rawItems() + " items aren't known to this game (missing mods?) and were kept as they are."));
+                    + merged.replaced() + " updated, " + merged.keptNewer() + " kept (a newer memory of the same container won). "
+                    + items + " stacks. The original " + (files.size() == 1 ? "file was" : "files were") + " not changed."));
+            if (raw > 0) {
+                source.sendFeedback(Text.literal(raw + " items aren't known to this game (missing mods?) and were kept as they are."));
             }
-            if (result.skipped() > 0) source.sendFeedback(Text.literal(result.skipped() + " entries were unreadable and skipped."));
-            if (ChestTrackerImport.otherVersion(result)) {
-                source.sendFeedback(Text.literal("The file is from another Minecraft version (data version "
-                        + result.dataVersion() + "); some items may not show correctly."));
+            if (skipped > 0) source.sendFeedback(Text.literal(skipped + " entries were unreadable and skipped."));
+            if (otherVersion != 0) {
+                source.sendFeedback(Text.literal("A file is from another Minecraft version (data version "
+                        + otherVersion + "); some items may not show correctly."));
             }
-            EntityTrackerClient.LOGGER.info("Imported {} into bank {}: {}, {}", file, bank.key, merged, result.items());
+            EntityTrackerClient.LOGGER.info("Imported {} into bank {}: {}, {} stacks", names, bank.key, merged, items);
         }));
-        return 1;
+        return files.size();
+    }
+
+    /** True when the file is named after this bank's server or one of its aliases. */
+    private static boolean fromServer(BankManager banks, MemoryBank bank, Path file) {
+        String s = simplify(stem(file));
+        return banks.storage().addressesFor(bank.server).stream().anyMatch(a -> simplify(a).equals(s));
+    }
+
+    private static String stem(Path file) {
+        return file.getFileName().toString().replaceFirst("(?i)\\.nbt$", "");
     }
 
     /** Lowercase letters and digits only, so "2b2t_com" matches the server "2b2t.com". */

@@ -23,7 +23,8 @@ as they get built, and get added or removed as plans change. For what works toda
 - Villager and wandering trader offers in their own Trades screen: prices and stock as last seen,
   changes since your previous look, per-account prices, level-up and profession warnings
 - Chest Tracker importer: `/etracker import` brings Chest Tracker 2.x memory banks over (read-only,
-  the original file is never changed; newer memories win)
+  the original file is never changed; newer memories win). `/etracker import all` merges the files of
+  every address of a server, e.g. 9b9t.com, 9b9t.org and 2b2t.com
 
 ## Next
 

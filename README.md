@@ -66,8 +66,9 @@ with, searchable in their own screen.
   restore and undo. The **Trash (N)** button shows what's in it.
 - **Safe storage.** Memory is saved per server under `<game dir>/entity-tracker/`, outside
   `config/`, with atomic writes and daily backups. Loading, saving and building the search index
-  happen in the background, so even a huge base never freezes the game. One server address can have several aliases
-  (e.g. `9b9t.com` and `9b9t.org`).
+  happen in the background, so even a huge base never freezes the game. Several addresses can share
+  one memory (`server-aliases.json`); by default `9b9t.com`, `9b9t.org` and `2b2t.com` (which
+  redirects to 9b9t) do. `2b2t.org`, the real 2b2t, stays separate.
 - **High-ping aware.** Contents are only attributed to a container you actually clicked, matched in
   order and by name, so two minecarts clicked quickly on a laggy server each get their own
   contents. Closing a screen before its contents arrive never overwrites what was remembered.
@@ -88,9 +89,11 @@ with, searchable in their own screen.
 - `/etracker trash`, `/etracker trash restoreall`, `/etracker heads`, `/etracker alias <hash> <name>`.
 - `/etracker import`: bring over your Chest Tracker memories. Copy the server's `.nbt` file into
   `<game dir>/entity-tracker/import/` (Chest Tracker's own `chesttracker/` folder is searched too), then
-  `/etracker import <file>` while on that server. The file is only read. Containers the mod already
-  remembers with newer contents are kept; Chest Tracker doesn't save slot positions, so imported
-  items fill the grid in order until you open the container again.
+  `/etracker import <file>` while on that server. Files named after any of the server's addresses
+  are marked `[this server]`, and `/etracker import all` imports all of them at once. The files are
+  only read. When the same container is in several files, or the mod already remembers it, the
+  newest memory wins. Chest Tracker doesn't save slot positions, so imported items fill the grid in
+  order until you open the container again.
 
 It only records containers you open yourself, and only when it can tell for sure which block or
 entity the screen belongs to. Server menus and plugin GUIs are ignored.
