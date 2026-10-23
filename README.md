@@ -86,6 +86,11 @@ with, searchable in their own screen.
 - `/etracker area here <radius>`: mark everything in an area as destroyed (for example after a
   base was griefed), with a confirm list and `/etracker undo`.
 - `/etracker trash`, `/etracker trash restoreall`, `/etracker heads`, `/etracker alias <hash> <name>`.
+- `/etracker import`: bring over your Chest Tracker memories. Copy the server's `.nbt` file into
+  `<game dir>/entity-tracker/import/` (Chest Tracker's own `chesttracker/` folder is searched too), then
+  `/etracker import <file>` while on that server. The file is only read. Containers the mod already
+  remembers with newer contents are kept; Chest Tracker doesn't save slot positions, so imported
+  items fill the grid in order until you open the container again.
 
 It only records containers you open yourself, and only when it can tell for sure which block or
 entity the screen belongs to. Server menus and plugin GUIs are ignored.

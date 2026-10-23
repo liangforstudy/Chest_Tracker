@@ -22,11 +22,11 @@ as they get built, and get added or removed as plans change. For what works toda
 - Safe binding on laggy servers; touch-friendly (PojavLauncher)
 - Villager and wandering trader offers in their own Trades screen: prices and stock as last seen,
   changes since your previous look, per-account prices, level-up and profession warnings
+- Chest Tracker importer: `/etracker import` brings Chest Tracker 2.x memory banks over (read-only,
+  the original file is never changed; newer memories win)
 
 ## Next
 
-- **Chest Tracker importer:** bring your existing Chest Tracker memories over (read-only, the
-  original files are never changed)
 - **JourneyMap integration:** results as map markers and waypoints, readable across dimensions
 
 ## Planned

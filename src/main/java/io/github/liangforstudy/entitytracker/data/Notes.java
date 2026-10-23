@@ -13,6 +13,8 @@ public final class Notes {
     public static final String PROFESSION_CHANGED = "profession_changed";
     /** A villager levelled up since its offers were seen: it has new ones. */
     public static final String LEVELED_UP = "leveled_up";
+    /** Brought over from Chest Tracker: slot order and age are as that mod saved them. */
+    public static final String IMPORTED = "imported";
 
     // Hints: the contents may change on their own; recomputed while the container is loaded.
     public static final String HOPPER_BELOW = "hopper_below";
