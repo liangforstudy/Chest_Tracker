@@ -41,8 +41,11 @@ public final class Settings {
     public static int tradePreviewTicks = 35;
     /** Time per client tick spent building the search index in the background. */
     public static long indexBudgetNanos = 1_000_000;
-    /** Time one search refresh may spend indexing what isn't ready yet; the rest follows next ticks. */
-    public static long searchBudgetNanos = 8_000_000;
+    /**
+     * Time the search may take per frame (searching, and indexing what isn't ready yet); the
+     * rest follows on the next frames, nearest containers first, so results show up at once.
+     */
+    public static long searchBudgetNanos = 4_000_000;
     /** Daily backups to keep per bank. */
     public static int backupsToKeep = 7;
 

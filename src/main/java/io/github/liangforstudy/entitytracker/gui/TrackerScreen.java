@@ -59,8 +59,10 @@ public final class TrackerScreen extends Screen {
     private boolean showDestroyed = true;
     /** The results shown are close matches, not exact ones. */
     private boolean fuzzy;
-    /** Containers the current search couldn't look at yet (still being indexed). */
+    /** Containers the current search hasn't looked at yet. */
     private int indexing;
+    /** The search being worked through, a few milliseconds per frame; null when finished. */
+    private @Nullable SearchJob job;
     private boolean waitingForBank;
     /** false = remembered containers, true = the trash. */
     private boolean trashView;
@@ -276,8 +278,9 @@ public final class TrackerScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
-        // Still searching, or the bank just finished loading while the screen was open.
-        if (indexing > 0 || (waitingForBank && EntityTrackerClient.banks().bank() != null)) refreshKeepingScroll();
+        // The bank just finished loading while the screen was open. (A search in progress
+        // carries on by itself in render, a few milliseconds per frame.)
+        if (waitingForBank && EntityTrackerClient.banks().bank() != null) refreshKeepingScroll();
         waitingForBank = EntityTrackerClient.banks().bank() == null;
     }
 
@@ -336,22 +339,42 @@ public final class TrackerScreen extends Screen {
                 Text.translatable("screen.entitytracker.delete_confirm_body", label(record))));
     }
 
+    /**
+     * Starts a new search and shows whatever it finds within this frame's budget; the rest
+     * follows over the next frames (see {@link SearchJob}), so the nearest results appear at once
+     * and typing never waits for a big base to be searched to the end.
+     */
     private void refresh() {
-        long start = System.nanoTime();
         if (viewButton != null) viewButton.setMessage(trashLabel());
-        indexing = 0;
         String query = search.getText().trim().toLowerCase(Locale.ROOT);
         if (query.startsWith("@")) query = query.substring(1); // @head:Notch until full filters (4.6)
         fuzzy = false;
-        List<Row> rows = rows(query, false);
-        if (rows.isEmpty() && !query.isEmpty()) {
-            // Nothing exact: try close matches ("diamnd" -> diamond) and say so.
-            rows = rows(query, true);
-            fuzzy = !rows.isEmpty();
+        job = new SearchJob(query, records());
+        list.setRows(List.of());
+        continueSearch();
+    }
+
+    /** Runs the current search for one frame's budget and puts what it found in the list. */
+    private void continueSearch() {
+        if (job == null) return;
+        long start = System.nanoTime();
+        job.run(start + Settings.searchBudgetNanos);
+        if (!job.exact.isEmpty()) {
+            if (fuzzy) {
+                // The first exact match: close matches shown so far make way for it.
+                list.setRows(job.exact);
+                fuzzy = false;
+            } else if (job.exact.size() > list.children().size()) {
+                list.addRows(job.exact.subList(list.children().size(), job.exact.size()));
+            }
+        } else if (job.close.size() > list.children().size()) {
+            list.addRows(job.close.subList(list.children().size(), job.close.size()));
+            fuzzy = true;
         }
-        list.setRows(rows);
+        indexing = job.done ? 0 : job.remaining();
+        if (job.done) job = null;
         long ms = (System.nanoTime() - start) / 1_000_000;
-        if (ms > 16) EntityTrackerClient.LOGGER.warn("Tracker search took {} ms (longer than a frame)", ms);
+        if (ms > 16) EntityTrackerClient.LOGGER.warn("Tracker search step took {} ms (longer than a frame)", ms);
     }
 
     /** "close matches" next to the search field, when the results are fuzzy ones. */
@@ -361,47 +384,84 @@ public final class TrackerScreen extends Screen {
                 field.getY() + 6, 0xFFE8B04A);
     }
 
-    private List<Row> rows(String query, boolean fuzzy) {
-        List<Row> rows = new ArrayList<>();
+    /** What the list is searching through: "On me" first, then containers nearest first. */
+    private List<ContainerRecord> records() {
+        List<ContainerRecord> records = new ArrayList<>();
         MemoryBank bank = EntityTrackerClient.banks().bank();
-        if (bank != null) {
-            List<ContainerRecord> records = new ArrayList<>();
-            // Your own inventory first, so "it was on me all along" is the first thing you see.
-            InventoryRecord onMe = trashView ? null : InventoryRecord.current();
-            if (onMe != null) records.add(onMe);
-            records.addAll(bank.containers()
-                    .filter(r -> trashView ? r.isTrashed()
-                            : !r.isTrashed() && (showDestroyed || r.status != RecordStatus.LIKELY_DESTROYED))
-                    .sorted(Comparator.comparingDouble(TrackerScreen::sortDistance))
-                    .toList());
+        if (bank == null) return records;
+        // Your own inventory first, so "it was on me all along" is the first thing you see.
+        InventoryRecord onMe = trashView ? null : InventoryRecord.current();
+        if (onMe != null) records.add(onMe);
+        records.addAll(bank.containers()
+                .filter(r -> trashView ? r.isTrashed()
+                        : !r.isTrashed() && (showDestroyed || r.status != RecordStatus.LIKELY_DESTROYED))
+                .sorted(Comparator.comparingDouble(TrackerScreen::sortDistance))
+                .toList());
+        return records;
+    }
+
+    /**
+     * One search, worked through container by container (nearest first) and item by item until
+     * the time budget runs out, then carried on next frame. Results come in order, so they're
+     * only ever added at the bottom of the list. Until an exact match turns up, close matches
+     * ("diamnd" -> diamond) are collected on the way, so a typo shows results straight away
+     * instead of after a second pass over everything.
+     */
+    private static final class SearchJob {
+        final String query;
+        final String[] queryWords;
+        final List<ContainerRecord> records;
+        final List<Row> exact = new ArrayList<>();
+        final List<Row> close = new ArrayList<>();
+        int next;
+        /** Where to carry on inside records.get(next) (a big container can take several frames). */
+        int nextItem;
+        boolean done;
+
+        SearchJob(String query, List<ContainerRecord> records) {
+            this.query = query;
+            this.queryWords = Fuzzy.words(query);
+            this.records = records;
+        }
+
+        /** Containers not looked at yet. */
+        int remaining() {
+            return records.size() - next;
+        }
+
+        void run(long deadline) {
             ItemIndex index = EntityTrackerClient.index();
-            long end = System.nanoTime() + Settings.searchBudgetNanos;
-            for (ContainerRecord record : records) {
+            while (next < records.size() && exact.size() < MAX_ROWS) {
+                if (System.nanoTime() >= deadline) return;
+                ContainerRecord record = records.get(next);
                 if (query.isEmpty()) {
                     // Top-level stacks from the record itself: opening the screen indexes nothing.
-                    rows.add(new Row(record, null, record.items.size()));
+                    exact.add(new Row(record, null, record.items.size()));
                 } else {
-                    // Not indexed yet: only within this refresh's budget; the rest next tick.
+                    // Not indexed yet: index it slot by slot within the budget; carry on next frame.
                     List<ItemIndex.IndexedItem> items = record instanceof InventoryRecord
-                            ? index.items(record) : index.itemsWithin(record, end);
-                    if (items == null) {
-                        indexing++;
-                        continue;
-                    }
-                    for (ItemIndex.IndexedItem item : items) {
-                        if (fuzzy ? Fuzzy.matches(item.searchText(), query) : item.searchText().contains(query)) {
-                            rows.add(new Row(record, item, 0));
+                            ? index.items(record) : index.itemsWithin(record, deadline);
+                    if (items == null) return;
+                    for (; nextItem < items.size(); nextItem++) {
+                        if ((nextItem & 31) == 31 && System.nanoTime() >= deadline) return;
+                        ItemIndex.IndexedItem item = items.get(nextItem);
+                        if (item.searchText().contains(query)) {
+                            exact.add(new Row(record, item, 0));
+                        } else if (exact.isEmpty() && close.size() < MAX_ROWS
+                                && Fuzzy.matches(item.searchText(), item.words(), queryWords)) {
+                            close.add(new Row(record, item, 0));
                         }
                     }
                 }
-                if (rows.size() >= MAX_ROWS) break;
+                next++;
+                nextItem = 0;
             }
+            done = true;
         }
-        return rows;
     }
 
     /** Same dimension first, nearest first; other dimensions after. */
-    static double sortDistance(ContainerRecord r) {
+    public static double sortDistance(ContainerRecord r) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || client.world == null) return 0;
         if (r.dimension.equals(client.world.getRegistryKey().getValue().toString())) return client.player.squaredDistanceTo(r.x, r.y, r.z);
@@ -430,6 +490,7 @@ public final class TrackerScreen extends Screen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         pendingTooltip = null;
+        continueSearch(); // a search still in progress adds this frame's results before drawing
         super.render(context, mouseX, mouseY, delta);
         if (pendingTooltip != null) drawExplanation(context, textRenderer, pendingTooltip, tooltipX, tooltipY);
         ScreenTabs.drawUnderline(context, width, false);
@@ -454,7 +515,7 @@ public final class TrackerScreen extends Screen {
             context.drawCenteredTextWithShadow(textRenderer, Text.translatable(EntityTrackerClient.banks().isLoading()
                     ? "screen.entitytracker.loading" : "screen.entitytracker.no_bank"),
                     width / 2, height / 2, 0xFFAAAAAA);
-        } else if (list.children().isEmpty()) {
+        } else if (list.children().isEmpty() && job == null) {
             context.drawCenteredTextWithShadow(textRenderer, Text.translatable("screen.entitytracker.no_results"),
                     width / 2, height / 2, 0xFFAAAAAA);
         }
@@ -487,6 +548,11 @@ public final class TrackerScreen extends Screen {
         void setRows(List<Row> rows) {
             replaceEntries(rows.stream().map(Entry::new).toList());
             setScrollY(0);
+        }
+
+        /** Adds rows at the bottom, keeping the scroll and selection (a search still in progress). */
+        void addRows(List<Row> rows) {
+            for (Row row : rows) addEntry(new Entry(row));
         }
 
         @Override

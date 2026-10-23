@@ -50,6 +50,11 @@ public final class DetailScreen extends Screen {
     /** Breadcrumb parts on screen: {x0, x1, depth}; depth 0 = the container itself. */
     private final List<int[]> crumbs = new ArrayList<>();
     private int crumbY;
+    /**
+     * Everything above the buttons scrolls when it doesn't fit (big GUI scale, long notes, a
+     * double chest): mouse wheel, or drag on a touch screen. Content is clipped at viewBottom.
+     */
+    private int scroll, maxScroll, viewBottom;
 
     private record Level(String name, List<ItemStack> slots) {}
 
@@ -64,6 +69,7 @@ public final class DetailScreen extends Screen {
     protected void init() {
         if (top == null) top = new Level(TrackerScreen.label(record), decodeSlots());
         int buttonY = height - 26;
+        viewBottom = buttonY - 4;
         boolean actions = !(record instanceof InventoryRecord);
         int count = actions ? 5 : 2;
         int w = Math.min(100, (width - 40) / count);
@@ -157,8 +163,25 @@ public final class DetailScreen extends Screen {
     }
 
     @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
+        if (maxScroll == 0) return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
+        scroll = Math.clamp(scroll - (int) Math.round(vertical * 16), 0, maxScroll);
+        return true;
+    }
+
+    /** Dragging the content scrolls it, for touch screens (PojavLauncher) without a wheel. */
+    @Override
+    public boolean mouseDragged(Click click, double offsetX, double offsetY) {
+        if (maxScroll > 0 && click.button() == 0 && click.y() < viewBottom) {
+            scroll = Math.clamp(scroll - (int) Math.round(offsetY), 0, maxScroll);
+            return true;
+        }
+        return super.mouseDragged(click, offsetX, offsetY);
+    }
+
+    @Override
     public boolean mouseClicked(Click click, boolean doubled) {
-        if (click.y() >= crumbY - 2 && click.y() < crumbY + 10) {
+        if (click.y() < viewBottom && click.y() >= crumbY - 2 && click.y() < crumbY + 10) {
             for (int[] c : crumbs) {
                 if (click.x() >= c[0] && click.x() < c[1]) {
                     while (path.size() > c[2]) path.removeLast();
@@ -183,6 +206,7 @@ public final class DetailScreen extends Screen {
     }
 
     private int slotAt(double mx, double my) {
+        if (my >= viewBottom) return -1; // scrolled under the buttons
         List<ItemStack> slots = current().slots();
         for (int i = 0; i < slots.size(); i++) {
             int sx = gridX + (i % COLUMNS) * SLOT;
@@ -203,7 +227,8 @@ public final class DetailScreen extends Screen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);
         int cx = width / 2;
-        int y = 8;
+        int y = 8 - scroll;
+        context.enableScissor(0, 0, width, viewBottom);
         context.drawItem(TrackerScreen.entityIcon(record.type), cx - textRenderer.getWidth(title) / 2 - 20, y - 4);
         context.drawCenteredTextWithShadow(textRenderer, title, cx, y, 0xFFFFFFFF);
         y += 14;
@@ -269,6 +294,17 @@ public final class DetailScreen extends Screen {
         if (!record.hasSnapshot()) {
             context.drawCenteredTextWithShadow(textRenderer, Text.translatable("screen.entitytracker.never_opened"),
                     cx, gridY + SLOT + 4, 0xFFAAAAAA);
+        }
+        context.disableScissor();
+        int contentBottom = gridY + ((slots.size() + COLUMNS - 1) / COLUMNS) * SLOT + (roles.isEmpty() ? 0 : 14) + 4;
+        maxScroll = Math.max(0, contentBottom + scroll - viewBottom);
+        if (scroll > maxScroll) scroll = maxScroll; // content got shorter (stepped out of a shulker)
+        if (maxScroll > 0) {
+            // Thin scrollbar on the right, so it's clear there's more below.
+            int barH = Math.max(12, viewBottom * viewBottom / (viewBottom + maxScroll));
+            int barY = (viewBottom - barH) * scroll / maxScroll;
+            context.fill(width - 5, 0, width - 2, viewBottom, 0x40FFFFFF);
+            context.fill(width - 5, barY, width - 2, barY + barH, 0xC0FFFFFF);
         }
         if (hovered >= 0 && !slots.get(hovered).isEmpty()) {
             context.drawItemTooltip(textRenderer, slots.get(hovered), mouseX, mouseY);

@@ -25,7 +25,8 @@ with, searchable in their own screen.
 - **Deep search.** Item names, custom names, lore, enchantments (modded and datapack ones too),
   player heads by profile name or texture, and items inside shulkers and bundles, with the full path
   (`Donkey "Pack" > Shulker "Tools" > Diamond Pickaxe`). Typos are forgiven: when nothing matches
-  exactly, close matches are shown and marked as such ("dimond" finds diamonds).
+  exactly, close matches are shown and marked as such ("dimond" finds diamonds). Results appear
+  as they're found, nearest first, so on a big base the closest ones show up straight away.
 - **"On me".** Your own inventory (and the shulkers and bundles in it) is searched too, listed first,
   so the sword you're looking for doesn't hide in your inventory.
 - **Detail view.** Click any result to see the container's last known contents as an inventory
@@ -79,7 +80,8 @@ with, searchable in their own screen.
 
 - Press **K** (rebindable in Controls), the **ET** button in your inventory, or type `/etracker` to
   open the tracker. Type to search, click a result for its detail view, right-click a row (or tap
-  its **⋮**) for actions.
+  its **⋮**) for actions. The detail view scrolls (mouse wheel, or drag) when it doesn't fit, for
+  example a double chest at a large GUI scale.
 - **Storage | Trades** tabs at the top switch between the two screens; `/offers [text]` (or `/etracker trades`), or bind
   **Open trades** in Controls: the villager trades you've seen, e.g. `/offers mending`.
 - `/search <text>`: search from chat, nearest first.

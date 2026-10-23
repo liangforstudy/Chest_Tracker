@@ -172,6 +172,20 @@ public final class DebugCommand {
                             OpenTriggers.openLater(new io.github.liangforstudy.entitytracker.gui.TradeDetailScreen(trader,
                                     new io.github.liangforstudy.entitytracker.gui.TradesScreen(), ""));
                             return 1;
+                        })))
+                        // A container's detail view: the nearest one whose label or items contain the text.
+                        .then(literal("detail").then(argument("text", StringArgumentType.greedyString()).executes(ctx -> {
+                            MemoryBank bank = banks.bank();
+                            if (bank == null) return fail(ctx.getSource(), "No bank open");
+                            String text = StringArgumentType.getString(ctx, "text").toLowerCase(java.util.Locale.ROOT);
+                            var record = bank.containers()
+                                    .filter(r -> TrackerScreen.label(r).toLowerCase(java.util.Locale.ROOT).contains(text)
+                                            || EntityTrackerClient.index().items(r).stream().anyMatch(i -> i.searchText().contains(text)))
+                                    .min(Comparator.comparingDouble((ContainerRecord r) -> TrackerScreen.sortDistance(r))).orElse(null);
+                            if (record == null) return fail(ctx.getSource(), "No container matches");
+                            OpenTriggers.openLater(new io.github.liangforstudy.entitytracker.gui.DetailScreen(record,
+                                    new TrackerScreen(), text));
+                            return 1;
                         }))))
                 // Testing only (dev client): pretend containers within 8 blocks were last opened N days ago.
                 .then(literal("debug").requires(src -> FabricLoader.getInstance().isDevelopmentEnvironment()).then(literal("age").then(argument("days", IntegerArgumentType.integer(0, 365)).executes(ctx -> {

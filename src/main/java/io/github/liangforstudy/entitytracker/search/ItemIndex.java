@@ -34,8 +34,9 @@ public final class ItemIndex {
      * One item somewhere inside a container. {@code slot} is the container slot it (or the
      * shulker/bundle holding it) occupies; {@code path} lists the shulkers/bundles it sits in.
      * Identical stacks, e.g. duplicated shulkers, stay separate entries and are never merged.
+     * {@code words} is searchText split into words once, for close-match search.
      */
-    public record IndexedItem(ItemStack stack, int slot, List<String> path, String searchText) {}
+    public record IndexedItem(ItemStack stack, int slot, List<String> path, String searchText, String[] words) {}
 
     private record Cached(long lastOpened, List<IndexedItem> items) {}
 
@@ -87,7 +88,7 @@ public final class ItemIndex {
             if (System.nanoTime() >= deadline) return null;
             ContainerRecord.SlotItem slot = slots.get(p.next++);
             for (IndexedItem e : expansions.computeIfAbsent(slot.stack(), json -> expand(json, client))) {
-                p.items.add(new IndexedItem(e.stack(), slot.slot(), e.path(), e.searchText()));
+                p.items.add(new IndexedItem(e.stack(), slot.slot(), e.path(), e.searchText(), e.words()));
             }
         }
         partial.remove(record.key());
@@ -134,7 +135,8 @@ public final class ItemIndex {
 
     private static void add(List<IndexedItem> out, ItemStack stack, int slot, List<String> path,
                             Item.TooltipContext context, MinecraftClient client, int depth) {
-        out.add(new IndexedItem(stack, slot, path, searchText(stack, context, client)));
+        String text = searchText(stack, context, client);
+        out.add(new IndexedItem(stack, slot, path, text, Fuzzy.words(text)));
         if (depth >= MAX_DEPTH) return;
 
         List<String> inner = new ArrayList<>(path);
