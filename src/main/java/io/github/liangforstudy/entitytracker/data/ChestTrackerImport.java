@@ -113,6 +113,11 @@ public final class ChestTrackerImport {
                 NbtList stacks = memory.getListOrEmpty("items");
                 int slot = 0;
                 for (NbtElement e : stacks) {
+                    // Chest Tracker writes empty slots as {} (seen in ender chests): keep the slot free.
+                    if (e instanceof NbtCompound c && c.isEmpty()) {
+                        slot++;
+                        continue;
+                    }
                     JsonElement json = ItemStack.CODEC.parse(nbtOps, e).result()
                             .flatMap(stack -> ItemStack.CODEC.encodeStart(jsonOps, stack).result())
                             .orElse(null);
