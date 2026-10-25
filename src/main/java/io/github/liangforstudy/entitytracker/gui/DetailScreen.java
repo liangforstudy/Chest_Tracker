@@ -13,6 +13,7 @@ import io.github.liangforstudy.entitytracker.track.Trash;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.ingame.BookScreen;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.component.DataComponentTypes;
@@ -27,13 +28,16 @@ import org.lwjgl.glfw.GLFW;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * One container in detail (CLAUDE.md 4.1e): where it is (converted from another dimension when
  * possible), its status and notes, and its last snapshot as an inventory grid. Tap a shulker or
- * bundle to look inside it; items matching the search are outlined. Vanilla widgets, 18px slots.
+ * bundle to look inside it, or a book to read it; items matching the search are outlined.
+ * Vanilla widgets, 18px slots.
  */
 public final class DetailScreen extends Screen {
     private static final int SLOT = 18;
@@ -57,6 +61,12 @@ public final class DetailScreen extends Screen {
     private int scroll, maxScroll, viewBottom;
 
     private record Level(String name, List<ItemStack> slots) {}
+
+    /**
+     * Search matches by stack, worked out once rather than every frame: matching reads a book's
+     * pages, which for a shelf of 100-page books is far too slow to repeat per frame.
+     */
+    private final Map<ItemStack, Boolean> matches = new IdentityHashMap<>();
 
     public DetailScreen(ContainerRecord record, Screen parent, String query) {
         super(Text.literal(TrackerScreen.label(record)));
@@ -194,9 +204,12 @@ public final class DetailScreen extends Screen {
         if (slot >= 0) {
             ItemStack stack = current().slots().get(slot);
             List<ItemStack> inner = stack.isEmpty() ? null : inside(stack);
+            BookScreen.Contents book = isBook(stack) ? BookScreen.Contents.create(stack) : null;
             if (inner != null) {
                 path.addLast(new Level(stack.getName().getString(), inner)); // step inside
                 selected = -1;
+            } else if (book != null) {
+                client.setScreen(new Reader(book, this));
             } else {
                 selected = slot == selected ? -1 : slot; // tap to pin the tooltip (touch screens)
             }
@@ -278,7 +291,8 @@ public final class DetailScreen extends Screen {
             int sx = gridX + (i % COLUMNS) * SLOT;
             int sy = gridY + (i / COLUMNS) * SLOT;
             ItemStack stack = slots.get(i);
-            boolean match = !query.isEmpty() && !stack.isEmpty() && ItemIndex.matchesDeep(stack, query, 0);
+            boolean match = !query.isEmpty() && !stack.isEmpty()
+                    && matches.computeIfAbsent(stack, st -> ItemIndex.matchesDeep(st, query, 0));
             context.fill(sx, sy, sx + SLOT, sy + SLOT, match ? 0xFFE8B04A : 0xFF373737); // border
             context.fill(sx + 1, sy + 1, sx + SLOT - 1, sy + SLOT - 1, i == hovered || i == selected ? 0xFF9A9A9A : 0xFF8B8B8B);
             if (!stack.isEmpty()) {
@@ -287,6 +301,9 @@ public final class DetailScreen extends Screen {
             }
         }
         List<String> roles = path.isEmpty() ? slotRoles() : List.of();
+        if (roles.isEmpty() && slots.stream().anyMatch(DetailScreen::isBook)) {
+            roles = List.of(Text.translatable("screen.entitytracker.detail.read_hint").getString());
+        }
         if (!roles.isEmpty()) {
             context.drawCenteredTextWithShadow(textRenderer, String.join(" \u00B7 ", roles), cx,
                     gridY + ((slots.size() + COLUMNS - 1) / COLUMNS) * SLOT + 3, 0xFFAAAAAA);
@@ -323,6 +340,9 @@ public final class DetailScreen extends Screen {
         }
         if (type.endsWith("brewing_stand")) {
             return List.of(t("bottle"), t("bottle"), t("bottle"), t("ingredient"), t("fuel"));
+        }
+        if (type.endsWith("armor_stand")) {
+            return List.of(t("head"), t("chest"), t("legs"), t("feet"), t("main_hand"), t("off_hand"));
         }
         return List.of();
     }
@@ -374,5 +394,24 @@ public final class DetailScreen extends Screen {
     @Override
     public boolean shouldPause() {
         return false;
+    }
+
+    private static boolean isBook(ItemStack stack) {
+        return stack.contains(DataComponentTypes.WRITTEN_BOOK_CONTENT) || stack.contains(DataComponentTypes.WRITABLE_BOOK_CONTENT);
+    }
+
+    /** The vanilla book view, read-only, going back to the detail view when closed. */
+    private static final class Reader extends BookScreen {
+        private final Screen parent;
+
+        Reader(BookScreen.Contents contents, Screen parent) {
+            super(contents);
+            this.parent = parent;
+        }
+
+        @Override
+        public void close() {
+            client.setScreen(parent);
+        }
     }
 }

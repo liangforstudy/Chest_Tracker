@@ -24,17 +24,20 @@ public abstract class ClientPlayerInteractionManagerMixin {
     private void entitytracker$onInteractEntity(PlayerEntity player, Entity entity, Hand hand,
                                                 CallbackInfoReturnable<ActionResult> cir) {
         EntityTrackerClient.interactions().set(entity);
+        EntityTrackerClient.displays().onInteractEntity(entity);
     }
 
     @Inject(method = "interactEntityAtLocation", at = @At("HEAD"))
     private void entitytracker$onInteractEntityAt(PlayerEntity player, Entity entity, EntityHitResult hit, Hand hand,
                                                   CallbackInfoReturnable<ActionResult> cir) {
         EntityTrackerClient.interactions().set(entity);
+        EntityTrackerClient.displays().onInteractEntity(entity);
     }
 
     @Inject(method = "interactBlock", at = @At("HEAD"))
     private void entitytracker$onInteractBlock(ClientPlayerEntity player, Hand hand, BlockHitResult hit,
                                                CallbackInfoReturnable<ActionResult> cir) {
         EntityTrackerClient.interactions().setBlock(hit.getBlockPos());
+        EntityTrackerClient.displays().onInteractBlock(player, hand, hit);
     }
 }

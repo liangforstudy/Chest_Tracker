@@ -16,6 +16,7 @@ import net.minecraft.block.Blocks;
 import net.minecraft.block.BrewingStandBlock;
 import net.minecraft.block.EnderChestBlock;
 import net.minecraft.block.HopperBlock;
+import net.minecraft.block.LecternBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
@@ -131,7 +132,7 @@ public final class PositionTracker {
     }
 
     private static boolean isHome(EntityRecord record, ChunkPos chunk) {
-        int r = Settings.homeRadiusChunks;
+        int r = homeRadius(record);
         return Math.abs(chunk.x - record.homeChunkX) <= r && Math.abs(chunk.z - record.homeChunkZ) <= r;
     }
 
@@ -208,8 +209,8 @@ public final class PositionTracker {
             if (record.status != RecordStatus.UNLOADED && record.status != RecordStatus.LOADED) continue;
             if (record.flags.contains(Notes.WENT_THROUGH_PORTAL)) continue; // we know where it went
             // Only trust "not there" within entity tracking range (CLAUDE.md 4.1d C).
-            if (client.player == null || client.player.squaredDistanceTo(record.x, record.y, record.z)
-                    > Settings.missingCheckRange * Settings.missingCheckRange) continue;
+            double range = DisplayTracker.isDisplay(record.type) ? Settings.displayMissingCheckRange : Settings.missingCheckRange;
+            if (client.player == null || client.player.squaredDistanceTo(record.x, record.y, record.z) > range * range) continue;
             if (homeAreaLoaded(world, record)) {
                 record.status = RecordStatus.MISSING;
                 bank.markDirty();
@@ -237,7 +238,8 @@ public final class PositionTracker {
                 continue;
             }
             BlockState state = world.getBlockState(pos);
-            boolean present = world.getBlockEntity(pos) instanceof Inventory || state.getBlock() instanceof EnderChestBlock;
+            boolean present = world.getBlockEntity(pos) instanceof Inventory || state.getBlock() instanceof EnderChestBlock
+                    || state.getBlock() instanceof LecternBlock;
             if (present && checkBlockNotes(record, state, world)) bank.markDirty();
             RecordStatus next = present ? RecordStatus.LOADED : RecordStatus.LIKELY_DESTROYED;
             if (present) record.lastSeen = now;
@@ -338,6 +340,7 @@ public final class PositionTracker {
         String now = Registries.BLOCK.getId(state.getBlock()).toString();
         if (!family(now).equals(family(record.type))) changed = record.flags.add(Notes.CONTAINER_CHANGED);
         Set<String> hints = new LinkedHashSet<>();
+        DisplayTracker.addHints(record, state, hints);
         List<BlockPos> positions = new ArrayList<>();
         positions.add(record.pos);
         positions.addAll(record.otherPositions);
@@ -364,8 +367,16 @@ public final class PositionTracker {
         return id.replace("waxed_", "").replace("exposed_", "").replace("weathered_", "").replace("oxidized_", "");
     }
 
+    /**
+     * Chunks around the home chunk that count as home. Item frames never move, so theirs is just
+     * the chunk they hang in: "missing" as soon as that chunk is loaded without them.
+     */
+    private static int homeRadius(EntityRecord record) {
+        return DisplayTracker.isFixed(record.type) ? 0 : Settings.homeRadiusChunks;
+    }
+
     private static boolean homeAreaLoaded(ClientWorld world, EntityRecord record) {
-        int r = Settings.homeRadiusChunks;
+        int r = homeRadius(record);
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
                 if (!world.getChunkManager().isChunkLoaded(record.homeChunkX + dx, record.homeChunkZ + dz)) return false;

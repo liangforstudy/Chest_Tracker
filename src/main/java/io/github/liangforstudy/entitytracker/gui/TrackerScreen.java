@@ -424,6 +424,17 @@ public final class TrackerScreen extends Screen {
             this.records = records;
         }
 
+        /**
+         * Book pages already searched, by identity: copies of one book share their text, so a
+         * wall of the same 100-page book is read once per search, not once per copy.
+         */
+        final java.util.IdentityHashMap<String, Boolean> books = new java.util.IdentityHashMap<>();
+
+        boolean bookMatches(String text) {
+            if (text.isEmpty()) return false;
+            return books.computeIfAbsent(text, t -> t.contains(query));
+        }
+
         /** Containers not looked at yet. */
         int remaining() {
             return records.size() - next;
@@ -445,7 +456,7 @@ public final class TrackerScreen extends Screen {
                     for (; nextItem < items.size(); nextItem++) {
                         if ((nextItem & 31) == 31 && System.nanoTime() >= deadline) return;
                         ItemIndex.IndexedItem item = items.get(nextItem);
-                        if (item.searchText().contains(query)) {
+                        if (item.searchText().contains(query) || bookMatches(item.bookText())) {
                             exact.add(new Row(record, item, 0));
                         } else if (exact.isEmpty() && close.size() < MAX_ROWS
                                 && Fuzzy.matches(item.searchText(), item.words(), queryWords)) {

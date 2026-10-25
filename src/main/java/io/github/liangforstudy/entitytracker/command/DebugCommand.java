@@ -180,7 +180,7 @@ public final class DebugCommand {
                             String text = StringArgumentType.getString(ctx, "text").toLowerCase(java.util.Locale.ROOT);
                             var record = bank.containers()
                                     .filter(r -> TrackerScreen.label(r).toLowerCase(java.util.Locale.ROOT).contains(text)
-                                            || EntityTrackerClient.index().items(r).stream().anyMatch(i -> i.searchText().contains(text)))
+                                            || EntityTrackerClient.index().items(r).stream().anyMatch(i -> i.contains(text)))
                                     .min(Comparator.comparingDouble((ContainerRecord r) -> TrackerScreen.sortDistance(r))).orElse(null);
                             if (record == null) return fail(ctx.getSource(), "No container matches");
                             OpenTriggers.openLater(new io.github.liangforstudy.entitytracker.gui.DetailScreen(record,
@@ -292,7 +292,7 @@ public final class DebugCommand {
         }
         for (ContainerRecord r : records) {
             for (ItemIndex.IndexedItem item : EntityTrackerClient.index().items(r)) {
-                if (!item.searchText().contains(query)) continue;
+                if (!item.contains(query)) continue;
                 hits++;
                 String path = String.join(" > ", item.path());
                 source.sendFeedback(Text.literal("- " + item.stack().getCount() + "x "

@@ -6,6 +6,7 @@ import io.github.liangforstudy.entitytracker.gui.OpenTriggers;
 import io.github.liangforstudy.entitytracker.search.HeadAliases;
 import io.github.liangforstudy.entitytracker.search.ItemIndex;
 import io.github.liangforstudy.entitytracker.track.BankManager;
+import io.github.liangforstudy.entitytracker.track.DisplayTracker;
 import io.github.liangforstudy.entitytracker.track.InteractionTracker;
 import io.github.liangforstudy.entitytracker.track.PositionTracker;
 import io.github.liangforstudy.entitytracker.track.ScreenBinder;
@@ -26,6 +27,7 @@ public class EntityTrackerClient implements ClientModInitializer {
     private static BankManager banks;
     private static ScreenBinder screens;
     private static TradeBinder trades;
+    private static DisplayTracker displays;
     private static final ItemIndex index = new ItemIndex();
     private static HeadAliases headAliases;
 
@@ -40,6 +42,10 @@ public class EntityTrackerClient implements ClientModInitializer {
 
     public static TradeBinder trades() {
         return trades;
+    }
+
+    public static DisplayTracker displays() {
+        return displays;
     }
 
     public static BankManager banks() {
@@ -62,6 +68,7 @@ public class EntityTrackerClient implements ClientModInitializer {
         PositionTracker positions = new PositionTracker(banks, interactions);
         screens = new ScreenBinder(interactions, banks, positions);
         trades = new TradeBinder(interactions, banks, positions);
+        displays = new DisplayTracker(banks, positions, interactions);
 
         positions.register();
         screens.register();
@@ -71,6 +78,7 @@ public class EntityTrackerClient implements ClientModInitializer {
             interactions.tick();
             banks.tick(client);
             positions.tick(client);
+            displays.tick(client);
             // Build the search index a little at a time (1 ms per tick), so opening the
             // tracker and searching are instant and never freeze the game.
             var bank = banks.bank();

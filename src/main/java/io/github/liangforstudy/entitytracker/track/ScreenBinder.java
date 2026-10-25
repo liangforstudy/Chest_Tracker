@@ -14,10 +14,11 @@ import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.ChestBlock;
 import net.minecraft.block.EnderChestBlock;
+import net.minecraft.block.LecternBlock;
 import net.minecraft.block.enums.ChestType;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
+import net.minecraft.client.gui.screen.ingame.ScreenHandlerProvider;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.passive.AbstractDonkeyEntity;
@@ -77,7 +78,8 @@ public final class ScreenBinder {
 
     public void register() {
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
-            if (!(screen instanceof HandledScreen<?> handled) || seen.containsKey(screen)) return;
+            // Lectern screens aren't HandledScreens, but have a handler with the book in it.
+            if (!(screen instanceof ScreenHandlerProvider<?> handled) || seen.containsKey(screen)) return;
             seen.put(screen, Boolean.TRUE);
             MemoryBank bank = banks.bank();
             ClientWorld world = client.world;
@@ -196,11 +198,14 @@ public final class ScreenBinder {
             return new Bound(handler, record, -1);
         }
 
+        if (DisplayTracker.hasNoScreen(state.getBlock())) return null;
         BlockPos other = null;
         int expected;
         if (state.getBlock() instanceof ChestBlock && state.get(ChestBlock.CHEST_TYPE) != ChestType.SINGLE) {
             other = pos.offset(ChestBlock.getFacing(state));
             expected = 54;
+        } else if (state.getBlock() instanceof LecternBlock) {
+            expected = 1; // the book
         } else if (world.getBlockEntity(pos) instanceof Inventory inventory) {
             expected = inventory.size();
         } else {

@@ -17,8 +17,22 @@ with, searchable in their own screen.
 - **Entity containers that move.** Entities are remembered by UUID, not position, so a donkey you
   lead away or a minecart you push stays the same record. The mod recognises them on sight when
   you come back.
-- **Block containers.** Chests (single and double), barrels, hoppers, furnaces, smokers, blast
-  furnaces, dispensers, droppers, brewing stands and shulker boxes.
+- **Block containers.** Chests (single and double, trapped and copper), barrels, hoppers,
+  furnaces, smokers, blast furnaces, dispensers, droppers, crafters, brewing stands and shulker
+  boxes.
+- **Things that hold items without a container screen.** Shelves, decorated pots, jukebox discs,
+  lectern books, chiseled bookshelves, item frames (glow ones too) and armor stands. Like a chest
+  once opened, each is remembered once you right-click it, and kept up to date after that:
+  shelves, pots, frames and armor stands whenever they're loaded, since the server sends their
+  items. Servers only say *whether* a jukebox or chiseled bookshelf slot is filled, not with what,
+  so for those the mod knows the items you put in yourself, and marks the rest as "not seen yet".
+  A lectern's book is remembered when you put it there or open the lectern. Item frames never
+  move, so they're expected at their exact spot; armor stands can be pushed, so they get the same
+  home area as donkeys and villagers.
+- **Books.** Written books and books and quills are searchable by title, author and page text,
+  wherever they are (in shulkers, bundles, on lecterns and in chiseled bookshelves). Tap a book in
+  the detail view to read it. Built for big ones: a 100-page book is saved once however many
+  copies you have, and searching its pages never stalls the game.
 - **Ender chests per account.** If you play several accounts on one server, each account's ender
   chest is remembered separately and all of them are searchable, so you know which account to
   switch to.
@@ -30,7 +44,8 @@ with, searchable in their own screen.
 - **"On me".** Your own inventory (and the shulkers and bundles in it) is searched too, listed first,
   so the sword you're looking for doesn't hide in your inventory.
 - **Detail view.** Click any result to see the container's last known contents as an inventory
-  grid, with the matching items outlined. Tap a shulker or bundle to look inside it. Copy the
+  grid, with the matching items outlined. Tap a shulker or bundle to look inside it, or a book to
+  read it. Copy the
   coordinates as `x y z`, or as `x z` for Baritone goals.
 - **Across dimensions.** A Nether stash seen from the overworld shows where it lines up
   (`Nether (30, 99, 25) ≈ 244, 204 here`), and results are sorted by that distance. The scale comes

@@ -214,6 +214,7 @@ public final class BankStorage {
         try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             root = JsonParser.parseReader(reader).getAsJsonObject();
         }
+        BookStore.unpack(root);
         MemoryBank bank = new MemoryBank(key, server);
         if (root.has("accounts")) {
             for (Map.Entry<String, JsonElement> e : root.getAsJsonObject("accounts").entrySet()) {
@@ -287,7 +288,8 @@ public final class BankStorage {
             backupIfNeeded(key, file);
             Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
             try (Writer writer = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
-                GSON.toJson(root, writer);
+                // Here, off the game thread: walking every item for books is the slow part.
+                GSON.toJson(BookStore.pack(root), writer);
             }
             try {
                 Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);

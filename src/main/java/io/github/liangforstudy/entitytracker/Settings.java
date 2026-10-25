@@ -28,6 +28,11 @@ public final class Settings {
      * view distance, so farther away a loaded home area proves nothing.
      */
     public static double missingCheckRange = 48.0;
+    /**
+     * The same for item frames and armor stands, which servers often send only within 32 blocks
+     * (Spigot and Paper count them as "misc" entities).
+     */
+    public static double displayMissingCheckRange = 24.0;
     /** Radius around a vanished entity in which dropped items count as its drops. */
     public static double dropRadius = 2.5;
     /** Days a record stays in the trash (restorable) before it is forgotten. */

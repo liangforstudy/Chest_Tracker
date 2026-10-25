@@ -9,6 +9,8 @@ import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.BundleContentsComponent;
 import net.minecraft.component.type.ContainerComponent;
 import net.minecraft.component.type.LoreComponent;
+import net.minecraft.component.type.WritableBookContentComponent;
+import net.minecraft.component.type.WrittenBookContentComponent;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.tooltip.TooltipType;
@@ -34,9 +36,17 @@ public final class ItemIndex {
      * One item somewhere inside a container. {@code slot} is the container slot it (or the
      * shulker/bundle holding it) occupies; {@code path} lists the shulkers/bundles it sits in.
      * Identical stacks, e.g. duplicated shulkers, stay separate entries and are never merged.
-     * {@code words} is searchText split into words once, for close-match search.
+     * {@code words} is searchText split into words once, for close-match search. {@code bookText}
+     * is a book's page text (empty for anything else): searched for exact matches only, since a
+     * 100-page book would make close matches both slow and noisy. Copies of one book share it.
      */
-    public record IndexedItem(ItemStack stack, int slot, List<String> path, String searchText, String[] words) {}
+    public record IndexedItem(ItemStack stack, int slot, List<String> path, String searchText, String[] words,
+                              String bookText) {
+        /** Exact match on the item itself or, for a book, its pages. Query lowercase. */
+        public boolean contains(String query) {
+            return searchText.contains(query) || (!bookText.isEmpty() && bookText.contains(query));
+        }
+    }
 
     private record Cached(long lastOpened, List<IndexedItem> items) {}
 
@@ -88,7 +98,7 @@ public final class ItemIndex {
             if (System.nanoTime() >= deadline) return null;
             ContainerRecord.SlotItem slot = slots.get(p.next++);
             for (IndexedItem e : expansions.computeIfAbsent(slot.stack(), json -> expand(json, client))) {
-                p.items.add(new IndexedItem(e.stack(), slot.slot(), e.path(), e.searchText(), e.words()));
+                p.items.add(new IndexedItem(e.stack(), slot.slot(), e.path(), e.searchText(), e.words(), e.bookText()));
             }
         }
         partial.remove(record.key());
@@ -136,7 +146,7 @@ public final class ItemIndex {
     private static void add(List<IndexedItem> out, ItemStack stack, int slot, List<String> path,
                             Item.TooltipContext context, MinecraftClient client, int depth) {
         String text = searchText(stack, context, client);
-        out.add(new IndexedItem(stack, slot, path, text, Fuzzy.words(text)));
+        out.add(new IndexedItem(stack, slot, path, text, Fuzzy.words(text), bookText(stack)));
         if (depth >= MAX_DEPTH) return;
 
         List<String> inner = new ArrayList<>(path);
@@ -157,6 +167,7 @@ public final class ItemIndex {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.world == null) return false;
         if (searchText(stack, Item.TooltipContext.create(client.world), client).contains(query)) return true;
+        if (bookText(stack).contains(query)) return true;
         if (depth >= MAX_DEPTH) return false;
         ContainerComponent container = stack.get(DataComponentTypes.CONTAINER);
         if (container != null) for (ItemStack c : container.iterateNonEmpty()) if (matchesDeep(c, query, depth + 1)) return true;
@@ -170,6 +181,23 @@ public final class ItemIndex {
         MinecraftClient client = MinecraftClient.getInstance();
         if (stack.isEmpty() || client.world == null) return "";
         return searchText(stack, Item.TooltipContext.create(client.world), client);
+    }
+
+    /**
+     * A written book's or book and quill's pages as one lowercase text, empty for other items.
+     * Title and author are in the tooltip already (searchText).
+     */
+    public static String bookText(ItemStack stack) {
+        WrittenBookContentComponent written = stack.get(DataComponentTypes.WRITTEN_BOOK_CONTENT);
+        WritableBookContentComponent writable = stack.get(DataComponentTypes.WRITABLE_BOOK_CONTENT);
+        if (written == null && writable == null) return "";
+        StringBuilder sb = new StringBuilder();
+        if (written != null) {
+            for (var page : written.pages()) sb.append(page.raw().getString()).append('\n');
+        } else {
+            for (var page : writable.pages()) sb.append(page.raw()).append('\n');
+        }
+        return sb.toString().toLowerCase(Locale.ROOT);
     }
 
     /** Tooltip lines cover custom name, lore, enchantments and effects; the id covers the rest. */

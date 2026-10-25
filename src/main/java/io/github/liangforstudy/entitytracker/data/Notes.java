@@ -22,6 +22,10 @@ public final class Notes {
     public static final String PROCESSES_ITEMS = "processes_items";
     public static final String MOVES_ITEMS = "moves_items";
     public static final String OVER_HOPPER = "over_hopper";
+    /** A jukebox or chiseled bookshelf holds something nobody saw go in (the server doesn't say what). */
+    public static final String UNKNOWN_CONTENTS = "unknown_contents";
+    /** A lectern holds a book that wasn't seen yet: open it to remember the book. */
+    public static final String UNREAD_BOOK = "unread_book";
     /** Wandering traders leave by themselves after a while. */
     public static final String LEAVES_BY_ITSELF = "leaves_by_itself";
 
