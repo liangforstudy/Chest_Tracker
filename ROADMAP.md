@@ -36,6 +36,9 @@ as they get built, and get added or removed as plans change. For what works toda
 - Search filters (`@ench:mending`, `@in:donkey`, `@here`, ...)
 - Tracer lines from the crosshair to selected results
 - Named groups of containers ("Base 1", "Base 2") with per-group totals
+- Tracking the remaining block containers, which hold items without a normal container screen:
+  lecterns (the book on them), chiseled bookshelves (up to six books), shelves (three items) and
+  decorated pots
 - Settings screen (via Mod Menu)
 - Testing on servers that use ViaVersion, and on a real modpack instance
 
