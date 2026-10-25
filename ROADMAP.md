@@ -8,8 +8,9 @@ as they get built, and get added or removed as plans change. For what works toda
 
 - Tracking entity containers (donkeys, mules, llamas, chest and hopper minecarts, chest boats) by
   UUID, recognised on sight, followed as they move
-- Tracking block containers (chests, double chests, barrels, hoppers, furnaces, smokers, blast
-  furnaces, dispensers, droppers, brewing stands, shulker boxes) and per-account ender chests
+- Tracking block containers (chests, double chests, trapped chests, copper chests, barrels,
+  hoppers, furnaces, smokers, blast furnaces, dispensers, droppers, crafters, brewing stands,
+  shulker boxes) and per-account ender chests
 - One memory per server shared by all your accounts, server address aliases, safe saving with
   backups
 - Search: names, lore, enchantments, player heads and textures (with aliases), items nested in
@@ -36,9 +37,9 @@ as they get built, and get added or removed as plans change. For what works toda
 - Search filters (`@ench:mending`, `@in:donkey`, `@here`, ...)
 - Tracer lines from the crosshair to selected results
 - Named groups of containers ("Base 1", "Base 2") with per-group totals
-- Tracking the remaining block containers, which hold items without a normal container screen:
-  lecterns (the book on them), chiseled bookshelves (up to six books), shelves (three items) and
-  decorated pots
+- Tracking the last block containers added up to 26.2, which hold items without a normal container
+  screen: lecterns (the book on them), chiseled bookshelves (up to six books), shelves (three items)
+  and decorated pots
 - Settings screen (via Mod Menu)
 - Testing on servers that use ViaVersion, and on a real modpack instance
 
