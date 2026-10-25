@@ -44,6 +44,10 @@ as they get built, and get added or removed as plans change. For what works toda
   at their exact spot like a block, not with the 3x3 home-area rule for donkeys and villagers
 - Tracking armor stands (their armor and held items), with the same 3x3 home-area rule as donkeys
   and villagers, since they can be pushed around
+- Book tracking: search written books and books and quills by title, author and page text, and
+  read them in the detail view, including books inside shulkers, bundles, lecterns and chiseled
+  bookshelves. Built for large books (100 full pages): page text is stored once per distinct book
+  rather than once per copy, and searched without slowing the game down
 - Settings screen (via Mod Menu)
 - Testing on servers that use ViaVersion, and on a real modpack instance
 
