@@ -42,6 +42,8 @@ as they get built, and get added or removed as plans change. For what works toda
   decorated pots and jukeboxes (the disc in them)
 - Tracking item frames and glow item frames (the item in them). They never move, so they are judged
   at their exact spot like a block, not with the 3x3 home-area rule for donkeys and villagers
+- Tracking armor stands (their armor and held items), with the same 3x3 home-area rule as donkeys
+  and villagers, since they can be pushed around
 - Settings screen (via Mod Menu)
 - Testing on servers that use ViaVersion, and on a real modpack instance
 
