@@ -28,7 +28,6 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.entity.decoration.ItemFrameEntity;
-import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.tag.ItemTags;
@@ -39,8 +38,10 @@ import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
 
@@ -50,8 +51,12 @@ import java.util.Set;
  * player uses it (right-click), like a chest is once opened, and kept up to date from then on
  * with whatever the client can see:
  * <ul>
- *   <li>shelves, decorated pots, item frames and armor stands: the server sends their items, so
- *   they update whenever they're loaded;</li>
+ *   <li>shelves, item frames and armor stands: the server sends their items, so they update
+ *   whenever they're loaded;</li>
+ *   <li>decorated pots: vanilla only sends a pot's item when its chunk loads (never when it
+ *   changes), and Paper never sends it. So the items the player puts in count, confirmed by
+ *   the pot's wobble (the server wobbles it one way for an item taken, the other for one
+ *   refused); a chunk that does carry an item is believed, an empty one proves nothing;</li>
  *   <li>jukeboxes and chiseled bookshelves: the server only says whether a slot is filled, so
  *   the item is the one the player put in (taken from their hand once the slot fills up);</li>
  *   <li>lecterns: the book the player put on it, or the one shown when the lectern is opened
@@ -73,8 +78,14 @@ public final class DisplayTracker {
     private final InteractionTracker clock;
     /** Items the player just put into a jukebox, lectern or chiseled bookshelf, until the slot fills. */
     private final List<Pending> pending = new ArrayList<>();
+    /** Items the player just offered to a decorated pot, until it wobbles. */
+    private final List<PotInsert> potInserts = new ArrayList<>();
+    /** The item each pot's chunk data last carried, so the same old data isn't applied again. */
+    private final Map<String, JsonElement> potChunkItems = new HashMap<>();
 
     private record Pending(String dimension, BlockPos pos, int slot, ItemStack stack, long tick) {}
+
+    private record PotInsert(String dimension, BlockPos pos, ItemStack stack, long wobbleBefore, long tick) {}
 
     public DisplayTracker(BankManager banks, PositionTracker positions, InteractionTracker clock) {
         this.banks = banks;
@@ -84,8 +95,10 @@ public final class DisplayTracker {
 
     /** What kind of item holder a block is, by its id; null for anything else. */
     enum Kind {
-        /** Items synced to the client: shelves (3) and decorated pots (1). */
+        /** Items synced to the client: shelves (3). */
         VISIBLE,
+        /** One stack, only seen when the chunk loads (vanilla) or never (Paper); see the class doc. */
+        POT,
         /** Only "has a disc" is synced. */
         JUKEBOX,
         /** Only "has a book" is synced; the book itself shows when it's opened. */
@@ -96,7 +109,8 @@ public final class DisplayTracker {
 
     /** By class, not id, so a modded block with a similar name never gets its state misread. */
     static @Nullable Kind kind(Block block) {
-        if (block instanceof ShelfBlock || block instanceof DecoratedPotBlock) return Kind.VISIBLE;
+        if (block instanceof ShelfBlock) return Kind.VISIBLE;
+        if (block instanceof DecoratedPotBlock) return Kind.POT;
         if (block instanceof ChiseledBookshelfBlock) return Kind.BOOKSHELF;
         if (block instanceof JukeboxBlock) return Kind.JUKEBOX;
         if (block instanceof LecternBlock) return Kind.LECTERN;
@@ -145,6 +159,13 @@ public final class DisplayTracker {
         BlockRecord record = getOrCreate(bank, world, pos, state);
         switch (kind) {
             case VISIBLE -> readVisible(bank, record, world);
+            case POT -> {
+                readPotChunk(bank, record, world);
+                if (!held.isEmpty() && world.getBlockEntity(pos) instanceof DecoratedPotBlockEntity pot) {
+                    potInserts.removeIf(p -> p.pos.equals(pos) && p.dimension.equals(dimension));
+                    potInserts.add(new PotInsert(dimension, pos.toImmutable(), held.copyWithCount(1), pot.lastWobbleTime, clock.currentTick()));
+                }
+            }
             case JUKEBOX -> {
                 if (!state.get(JukeboxBlock.HAS_RECORD) && held.contains(DataComponentTypes.JUKEBOX_PLAYABLE)) {
                     expect(dimension, pos, 0, held);
@@ -187,9 +208,12 @@ public final class DisplayTracker {
         ClientWorld world = client.world;
         if (bank == null || world == null) {
             pending.clear();
+            potInserts.clear();
+            potChunkItems.clear();
             return;
         }
         confirmPending(bank, world);
+        confirmPotInserts(bank, world);
         if (clock.currentTick() % Settings.trackIntervalTicks != 0) return;
 
         for (Entity entity : world.getEntities()) {
@@ -210,6 +234,7 @@ public final class DisplayTracker {
             BlockState state = world.getBlockState(pos);
             if (kind(state.getBlock()) != kind) continue; // gone or replaced
             if (kind == Kind.VISIBLE) readVisible(bank, record, world);
+            else if (kind == Kind.POT) readPotChunk(bank, record, world);
             else dropEmptied(bank, record, state, kind);
         }
     }
@@ -226,7 +251,7 @@ public final class DisplayTracker {
             }
             BlockState state = world.getBlockState(p.pos);
             Kind kind = kind(state.getBlock());
-            if (kind == null || kind == Kind.VISIBLE || !filled(state, kind, p.slot)) continue;
+            if (kind == null || kind == Kind.VISIBLE || kind == Kind.POT || !filled(state, kind, p.slot)) continue;
             it.remove();
             JsonElement json = encode(world, p.stack);
             if (json == null) continue;
@@ -247,12 +272,61 @@ public final class DisplayTracker {
     }
 
     private void readVisible(MemoryBank bank, BlockRecord record, ClientWorld world) {
-        BlockEntity be = world.getBlockEntity(record.pos);
-        if (!(be instanceof ShelfBlockEntity) && !(be instanceof DecoratedPotBlockEntity)) return;
-        Inventory inventory = (Inventory) be;
+        if (!(world.getBlockEntity(record.pos) instanceof ShelfBlockEntity shelf)) return;
         List<ContainerRecord.SlotItem> items = new ArrayList<>();
-        for (int i = 0; i < inventory.size(); i++) add(world, items, i, inventory.getStack(i));
-        setChecked(bank, record, items, inventory.size());
+        for (int i = 0; i < shelf.size(); i++) add(world, items, i, shelf.getStack(i));
+        setChecked(bank, record, items, shelf.size());
+    }
+
+    /** A pot's chunk data, when it carries an item the last data didn't: that's what was in it then. */
+    private void readPotChunk(MemoryBank bank, BlockRecord record, ClientWorld world) {
+        if (!(world.getBlockEntity(record.pos) instanceof DecoratedPotBlockEntity pot)) return;
+        ItemStack stack = pot.getStack();
+        if (stack.isEmpty()) return; // empty, or a server that doesn't send it: proves nothing
+        JsonElement json = encode(world, stack);
+        if (json == null || json.equals(potChunkItems.put(record.key(), json))) return;
+        record.hints.remove(Notes.UNKNOWN_CONTENTS);
+        setItems(bank, record, List.of(new ContainerRecord.SlotItem(0, json)), 1);
+    }
+
+    /**
+     * The pot wobbled since the player offered it an item: one way if the server took one
+     * (into an empty pot, or onto the same item), the other if it refused (full, or another item).
+     */
+    private void confirmPotInserts(MemoryBank bank, ClientWorld world) {
+        if (potInserts.isEmpty()) return;
+        String dimension = world.getRegistryKey().getValue().toString();
+        for (Iterator<PotInsert> it = potInserts.iterator(); it.hasNext(); ) {
+            PotInsert p = it.next();
+            if (!p.dimension.equals(dimension) || clock.currentTick() - p.tick > CONFIRM_TICKS) {
+                it.remove();
+                continue;
+            }
+            if (!(world.getBlockEntity(p.pos) instanceof DecoratedPotBlockEntity pot)
+                    || pot.lastWobbleTime == p.wobbleBefore || pot.lastWobbleType == null) continue;
+            it.remove();
+            BlockRecord record = getOrCreate(bank, world, p.pos, world.getBlockState(p.pos));
+            ItemStack known = record.items.isEmpty() ? ItemStack.EMPTY : decode(world, record.items.get(0).stack());
+            if (pot.lastWobbleType == DecoratedPotBlockEntity.WobbleType.POSITIVE) {
+                ItemStack now = ItemStack.areItemsAndComponentsEqual(known, p.stack)
+                        ? known.copyWithCount(Math.min(known.getCount() + 1, known.getMaxCount()))
+                        : p.stack.copyWithCount(1); // it was empty after all, or held this item already
+                JsonElement json = encode(world, now);
+                if (json == null) continue;
+                // Had it refused before, it held unseen items: now we know which, but not how many.
+                if (!known.isEmpty()) record.hints.remove(Notes.UNKNOWN_CONTENTS);
+                setItems(bank, record, List.of(new ContainerRecord.SlotItem(0, json)), 1);
+            } else if (known.isEmpty() || ItemStack.areItemsAndComponentsEqual(known, p.stack)
+                    && known.getCount() < known.getMaxCount()) {
+                // Refused, though as far as we knew it had room for this: it holds something unseen.
+                if (record.hints.add(Notes.UNKNOWN_CONTENTS)) bank.markDirty();
+            }
+        }
+    }
+
+    private static ItemStack decode(ClientWorld world, JsonElement json) {
+        var ops = world.getRegistryManager().getOps(JsonOps.INSTANCE);
+        return ItemStack.CODEC.parse(ops, json).result().orElse(ItemStack.EMPTY);
     }
 
     private void readEntity(MemoryBank bank, EntityRecord record, Entity entity, ClientWorld world) {
@@ -337,7 +411,7 @@ public final class DisplayTracker {
             case JUKEBOX -> slot == 0 && state.get(JukeboxBlock.HAS_RECORD);
             case LECTERN -> slot == 0 && state.get(LecternBlock.HAS_BOOK);
             case BOOKSHELF -> occupied(state, slot);
-            case VISIBLE -> true;
+            case VISIBLE, POT -> true;
         };
     }
 
@@ -347,7 +421,9 @@ public final class DisplayTracker {
      */
     static void addHints(BlockRecord record, BlockState state, Set<String> hints) {
         Kind kind = kind(state.getBlock());
-        if (kind == null || kind == Kind.VISIBLE) return;
+        // A pot's hint comes from a refused insert (confirmPotInserts) and stays until it's known.
+        if (kind == Kind.POT && record.hints.contains(Notes.UNKNOWN_CONTENTS)) hints.add(Notes.UNKNOWN_CONTENTS);
+        if (kind == null || kind == Kind.VISIBLE || kind == Kind.POT) return;
         int slots = kind == Kind.BOOKSHELF ? ChiseledBookshelfBlock.SLOT_OCCUPIED_PROPERTIES.size() : 1;
         for (int i = 0; i < slots; i++) {
             final int slot = i;

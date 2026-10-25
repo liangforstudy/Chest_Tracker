@@ -115,7 +115,7 @@
   "screen.entitytracker.explain.processes_items": "Furnaces and brewing stands change their own contents as they smelt or brew.",
   "screen.entitytracker.explain.moves_items": "Hoppers and hopper minecarts pull in and pass on items by themselves.",
   "screen.entitytracker.explain.over_hopper": "This minecart sits on a rail above a hopper, which can empty it.",
-  "screen.entitytracker.explain.unknown_contents": "Something is in here that you didn't see go in. Servers only tell the game which slots of a jukebox or chiseled bookshelf are filled, not with what, so the tracker only knows the items you put in yourself.",
+  "screen.entitytracker.explain.unknown_contents": "Something is in here that you didn't see go in. Servers only tell the game which slots of a jukebox or chiseled bookshelf are filled, not with what, and many never say what's in a decorated pot (a pot that refuses your item is full of something else), so the tracker only knows the items you put in yourself.",
   "screen.entitytracker.explain.unread_book": "There's a book on this lectern the tracker hasn't seen. Open the lectern once and the book is remembered (and searchable).",
   "screen.entitytracker.explain.stale": "You haven't opened it during your last %s days on this server. Not a warning: another player, or something in the game like a hopper, may have changed the contents while you were gone. Days you weren't on this server don't count.",
   "screen.entitytracker.explain.in_trash": "You put it in the trash. It's hidden from search and will be forgotten after %s days unless you restore it.",

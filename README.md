@@ -23,9 +23,10 @@ with, searchable in their own screen.
 - **Things that hold items without a container screen.** Shelves, decorated pots, jukebox discs,
   lectern books, chiseled bookshelves, item frames (glow ones too) and armor stands. Like a chest
   once opened, each is remembered once you right-click it, and kept up to date after that:
-  shelves, pots, frames and armor stands whenever they're loaded, since the server sends their
-  items. Servers only say *whether* a jukebox or chiseled bookshelf slot is filled, not with what,
-  so for those the mod knows the items you put in yourself, and marks the rest as "not seen yet".
+  shelves, frames and armor stands whenever they're loaded, since the server sends their items.
+  Servers only say *whether* a jukebox or chiseled bookshelf slot is filled, not with what, and
+  many (Paper among them) never say what's in a decorated pot, so for those the mod knows the
+  items you put in yourself, and marks the rest as "not seen yet".
   A lectern's book is remembered when you put it there or open the lectern. Item frames never
   move, so they're expected at their exact spot; armor stands can be pushed, so they get the same
   home area as donkeys and villagers.
