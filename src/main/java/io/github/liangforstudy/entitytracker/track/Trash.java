@@ -6,10 +6,9 @@ import io.github.liangforstudy.entitytracker.data.BlockRecord;
 import io.github.liangforstudy.entitytracker.data.ContainerRecord;
 import io.github.liangforstudy.entitytracker.data.EntityRecord;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
-import net.minecraft.util.math.BlockPos;
-
 import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.core.BlockPos;
 
 /**
  * Manual overrides (CLAUDE.md 4.1 step 5): the client can't tell "unloaded" from "destroyed", so

@@ -1,7 +1,5 @@
 package io.github.liangforstudy.entitytracker.track;
 
-import net.minecraft.entity.Entity;
-import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
@@ -9,6 +7,8 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Entity;
 
 /**
  * Recent right-clicks on entities and blocks (CLAUDE.md 4.1 step 1, 4.1d A), fed by the
@@ -29,11 +29,11 @@ public final class InteractionTracker {
     private long tick;
 
     public void set(Entity entity) {
-        add(new Pending(entity.getUuid(), entity.getId(), null, tick));
+        add(new Pending(entity.getUUID(), entity.getId(), null, tick));
     }
 
     public void setBlock(BlockPos pos) {
-        add(new Pending(null, -1, pos.toImmutable(), tick));
+        add(new Pending(null, -1, pos.immutable(), tick));
     }
 
     private void add(Pending p) {

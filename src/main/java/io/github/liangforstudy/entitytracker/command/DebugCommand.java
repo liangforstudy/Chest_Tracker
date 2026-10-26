@@ -21,10 +21,9 @@ import io.github.liangforstudy.entitytracker.track.BankManager;
 import io.github.liangforstudy.entitytracker.track.Trash;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -58,20 +57,20 @@ public final class DebugCommand {
                 .then(literal("bank").executes(ctx -> {
                     MemoryBank bank = banks.bank();
                     if (bank == null) return fail(ctx.getSource(), "No bank open");
-                    ctx.getSource().sendFeedback(Text.literal("Bank " + bank.key + ": " + bank.size()
+                    ctx.getSource().sendFeedback(Component.literal("Bank " + bank.key + ": " + bank.size()
                             + " containers, file " + banks.storage().bankFile(bank.key)));
                     return 1;
                 }))
                 .then(literal("area")
                         .then(literal("here").then(argument("radius", IntegerArgumentType.integer(1, 512)).executes(ctx -> {
-                            var player = MinecraftClient.getInstance().player;
-                            var world = MinecraftClient.getInstance().world;
+                            var player = Minecraft.getInstance().player;
+                            var world = Minecraft.getInstance().level;
                             if (player == null || world == null) return fail(ctx.getSource(), "Not in a world");
                             int r = IntegerArgumentType.getInteger(ctx, "radius");
-                            BlockPos p = player.getBlockPos();
+                            BlockPos p = player.blockPosition();
                             return openArea(ctx.getSource(), banks, Trash.Area.of(
-                                    new BlockPos(p.getX() - r, world.getBottomY(), p.getZ() - r),
-                                    new BlockPos(p.getX() + r, world.getTopYInclusive(), p.getZ() + r)));
+                                    new BlockPos(p.getX() - r, world.getMinY(), p.getZ() - r),
+                                    new BlockPos(p.getX() + r, world.getMaxY(), p.getZ() + r)));
                         })))
                         .then(argument("x1", IntegerArgumentType.integer()).then(argument("y1", IntegerArgumentType.integer())
                                 .then(argument("z1", IntegerArgumentType.integer()).then(argument("x2", IntegerArgumentType.integer())
@@ -93,14 +92,14 @@ public final class DebugCommand {
                             if (head == null) continue;
                             String key = head.textureHash() != null ? head.textureHash() : "(no texture)";
                             byTexture.computeIfAbsent(key, k -> new java.util.LinkedHashSet<>())
-                                    .add(item.stack().getName().getString()
+                                    .add(item.stack().getHoverName().getString()
                                             + (head.profileName() != null ? " [" + head.profileName() + "]" : ""));
                         }
                     }
-                    ctx.getSource().sendFeedback(Text.literal(byTexture.size() + " head textures:"));
+                    ctx.getSource().sendFeedback(Component.literal(byTexture.size() + " head textures:"));
                     byTexture.forEach((hash, names) -> {
                         String alias = EntityTrackerClient.headAliases().get(hash);
-                        ctx.getSource().sendFeedback(Text.literal("- " + (hash.length() > 12 ? hash.substring(0, 12) : hash)
+                        ctx.getSource().sendFeedback(Component.literal("- " + (hash.length() > 12 ? hash.substring(0, 12) : hash)
                                 + (alias != null ? " \"" + alias + "\"" : "") + ": " + String.join(", ", names)));
                     });
                     return byTexture.size();
@@ -122,14 +121,14 @@ public final class DebugCommand {
                             if (full == null) return fail(ctx.getSource(), "No remembered head texture starts with " + prefix);
                             EntityTrackerClient.headAliases().set(full, name);
                             EntityTrackerClient.index().clear();
-                            ctx.getSource().sendFeedback(Text.literal("Head texture " + full.substring(0, Math.min(12, full.length())) + " is now \"" + name + "\""));
+                            ctx.getSource().sendFeedback(Component.literal("Head texture " + full.substring(0, Math.min(12, full.length())) + " is now \"" + name + "\""));
                             return 1;
                         }))))
                 .then(literal("undo").executes(ctx -> {
                     MemoryBank bank = banks.bank();
                     if (bank == null) return fail(ctx.getSource(), "No bank open");
                     int n = Trash.undoArea(bank);
-                    ctx.getSource().sendFeedback(Text.literal("Undo: restored " + n + " containers from the trash"));
+                    ctx.getSource().sendFeedback(Component.literal("Undo: restored " + n + " containers from the trash"));
                     return n;
                 }))
                 .then(literal("trash").then(literal("restoreall").executes(ctx -> {
@@ -137,26 +136,26 @@ public final class DebugCommand {
                     if (bank == null) return fail(ctx.getSource(), "No bank open");
                     List<ContainerRecord> trashed = bank.allRecords().filter(ContainerRecord::isTrashed).toList();
                     for (ContainerRecord r : trashed) Trash.restore(bank, r);
-                    ctx.getSource().sendFeedback(Text.literal("Restored " + trashed.size() + " containers from the trash"));
+                    ctx.getSource().sendFeedback(Component.literal("Restored " + trashed.size() + " containers from the trash"));
                     return trashed.size();
                 })).executes(ctx -> {
                     MemoryBank bank = banks.bank();
                     if (bank == null) return fail(ctx.getSource(), "No bank open");
                     List<ContainerRecord> trashed = bank.allRecords().filter(ContainerRecord::isTrashed).toList();
-                    ctx.getSource().sendFeedback(Text.literal(trashed.size() + " in trash:"));
-                    for (ContainerRecord r : trashed) ctx.getSource().sendFeedback(Text.literal(describe(r)));
+                    ctx.getSource().sendFeedback(Component.literal(trashed.size() + " in trash:"));
+                    for (ContainerRecord r : trashed) ctx.getSource().sendFeedback(Component.literal(describe(r)));
                     return trashed.size();
                 }))
                 .then(literal("list").executes(ctx -> {
                     MemoryBank bank = banks.bank();
                     if (bank == null) return fail(ctx.getSource(), "No bank open");
-                    var player = MinecraftClient.getInstance().player;
+                    var player = Minecraft.getInstance().player;
                     List<ContainerRecord> records = bank.containers()
                             .sorted(Comparator.comparingDouble(r -> player == null ? 0
-                                    : player.squaredDistanceTo(r.x, r.y, r.z)))
+                                    : player.distanceToSqr(r.x, r.y, r.z)))
                             .toList();
-                    ctx.getSource().sendFeedback(Text.literal(records.size() + " remembered containers:"));
-                    for (ContainerRecord r : records) ctx.getSource().sendFeedback(Text.literal(describe(r)));
+                    ctx.getSource().sendFeedback(Component.literal(records.size() + " remembered containers:"));
+                    for (ContainerRecord r : records) ctx.getSource().sendFeedback(Component.literal(describe(r)));
                     return records.size();
                 }))
                 .then(searchNode(banks, "search"))
@@ -190,7 +189,7 @@ public final class DebugCommand {
                 // Testing only (dev client): pretend containers within 8 blocks were last opened N days ago.
                 .then(literal("debug").requires(src -> FabricLoader.getInstance().isDevelopmentEnvironment()).then(literal("age").then(argument("days", IntegerArgumentType.integer(0, 365)).executes(ctx -> {
                     MemoryBank bank = banks.bank();
-                    var player = MinecraftClient.getInstance().player;
+                    var player = Minecraft.getInstance().player;
                     if (bank == null || player == null) return fail(ctx.getSource(), "No bank open");
                     int days = IntegerArgumentType.getInteger(ctx, "days");
                     long shift = days * 86_400_000L;
@@ -198,13 +197,13 @@ public final class DebugCommand {
                     for (int i = 1; i <= days; i++) bank.playDays.add(java.time.LocalDate.now().minusDays(i).toString());
                     int n = 0;
                     for (ContainerRecord r : bank.allRecords().toList()) {
-                        if (r.hasSnapshot() && player.squaredDistanceTo(r.x, r.y, r.z) <= 64) {
+                        if (r.hasSnapshot() && player.distanceToSqr(r.x, r.y, r.z) <= 64) {
                             r.lastOpened = System.currentTimeMillis() - shift;
                             n++;
                         }
                     }
                     bank.markDirty();
-                    ctx.getSource().sendFeedback(Text.literal("Aged " + n + " containers"));
+                    ctx.getSource().sendFeedback(Component.literal("Aged " + n + " containers"));
                     return n;
                 }))))
                 // Chest Tracker memories: list the files found, or import one (or all of this server's) into its bank.
@@ -223,7 +222,7 @@ public final class DebugCommand {
                                         importFile(ctx.getSource(), banks, StringArgumentType.getString(ctx, "file"), true)))))
                 .then(literal("save").executes(ctx -> {
                     banks.saveNow();
-                    ctx.getSource().sendFeedback(Text.literal("Saved"));
+                    ctx.getSource().sendFeedback(Component.literal("Saved"));
                     return 1;
                 })));
 
@@ -243,8 +242,8 @@ public final class DebugCommand {
     }
 
     private static String describe(ContainerRecord r) {
-        var player = MinecraftClient.getInstance().player;
-        String dist = player == null ? "?" : String.valueOf(Math.round(Math.sqrt(player.squaredDistanceTo(r.x, r.y, r.z))));
+        var player = Minecraft.getInstance().player;
+        String dist = player == null ? "?" : String.valueOf(Math.round(Math.sqrt(player.distanceToSqr(r.x, r.y, r.z))));
         String label = r.name != null ? "\"" + r.name + "\" " + shortType(r.type) : shortType(r.type);
         String contents = r.hasSnapshot()
                 ? r.items.stream().map(DebugCommand::stackSummary).collect(Collectors.joining(", "))
@@ -256,7 +255,7 @@ public final class DebugCommand {
                         + (((BlockRecord) r).otherPositions.isEmpty() ? "" : " (double)");
         boolean reappeared = r instanceof EntityRecord e && e.reappeared;
         return String.format("- %s [%s] %sm %s, %s, seen %s ago, opened %s | %s%s",
-                label, Text.translatable("screen.entitytracker.status." + TrackerScreen.statusId(r)).getString(), dist, r.dimension.replace("minecraft:", ""), place,
+                label, Component.translatable("screen.entitytracker.status." + TrackerScreen.statusId(r)).getString(), dist, r.dimension.replace("minecraft:", ""), place,
                 age(r.lastSeen), r.hasSnapshot() ? age(r.lastOpened) + " ago" : "never",
                 contents.isEmpty() ? "empty" : contents, (reappeared ? " (reappeared)" : "")
                         + (r.isTrashed() ? " (in trash " + age(r.trashedAt) + ")" : "")
@@ -273,21 +272,21 @@ public final class DebugCommand {
         if (bank == null) return fail(source, "No bank open");
         String query = text.trim().toLowerCase(java.util.Locale.ROOT);
         if (query.startsWith("@")) query = query.substring(1);
-        var player = MinecraftClient.getInstance().player;
-        var world = MinecraftClient.getInstance().world;
-        String dimension = world == null ? "" : world.getRegistryKey().getValue().toString();
+        var player = Minecraft.getInstance().player;
+        var world = Minecraft.getInstance().level;
+        String dimension = world == null ? "" : world.dimension().identifier().toString();
         int hits = 0;
         List<ContainerRecord> records = java.util.stream.Stream.concat(
                         java.util.stream.Stream.ofNullable(InventoryRecord.current()), // "On me" first
                         bank.containers().filter(r -> !r.isTrashed()))
                 .filter(r -> radius <= 0 || (player != null && r.dimension.equals(dimension)
                         && !(r instanceof BlockRecord b && b.global)
-                        && player.squaredDistanceTo(r.x, r.y, r.z) <= (double) radius * radius))
-                .sorted(Comparator.comparingDouble(r -> player == null ? 0 : player.squaredDistanceTo(r.x, r.y, r.z)))
+                        && player.distanceToSqr(r.x, r.y, r.z) <= (double) radius * radius))
+                .sorted(Comparator.comparingDouble(r -> player == null ? 0 : player.distanceToSqr(r.x, r.y, r.z)))
                 .toList();
         if (query.isEmpty()) {
-            source.sendFeedback(Text.literal(records.size() + " containers within " + radius + " blocks:"));
-            for (ContainerRecord r : records) source.sendFeedback(Text.literal(describe(r)));
+            source.sendFeedback(Component.literal(records.size() + " containers within " + radius + " blocks:"));
+            for (ContainerRecord r : records) source.sendFeedback(Component.literal(describe(r)));
             return records.size();
         }
         for (ContainerRecord r : records) {
@@ -295,12 +294,12 @@ public final class DebugCommand {
                 if (!item.contains(query)) continue;
                 hits++;
                 String path = String.join(" > ", item.path());
-                source.sendFeedback(Text.literal("- " + item.stack().getCount() + "x "
-                        + item.stack().getName().getString() + " in " + TrackerScreen.title(r)
+                source.sendFeedback(Component.literal("- " + item.stack().getCount() + "x "
+                        + item.stack().getHoverName().getString() + " in " + TrackerScreen.title(r)
                         + (path.isEmpty() ? "" : " > " + path) + "  -  " + TrackerScreen.where(r) + warningSuffix(r)));
             }
         }
-        source.sendFeedback(Text.literal(hits + " matches for \"" + query + "\""
+        source.sendFeedback(Component.literal(hits + " matches for \"" + query + "\""
                 + (radius > 0 ? " within " + radius + " blocks" : "")));
         return hits;
     }
@@ -319,9 +318,9 @@ public final class DebugCommand {
 
     private static int openArea(FabricClientCommandSource source, BankManager banks, Trash.Area area) {
         MemoryBank bank = banks.bank();
-        var world = MinecraftClient.getInstance().world;
+        var world = Minecraft.getInstance().level;
         if (bank == null || world == null) return fail(source, "No bank open");
-        List<ContainerRecord> found = Trash.inArea(bank, world.getRegistryKey().getValue().toString(), area);
+        List<ContainerRecord> found = Trash.inArea(bank, world.dimension().identifier().toString(), area);
         if (found.isEmpty()) return fail(source, "No remembered containers in that area");
         OpenTriggers.openLater(new AreaConfirmScreen(found, area));
         return found.size();
@@ -341,13 +340,13 @@ public final class DebugCommand {
                     + " and run /etracker import again.");
         }
         MemoryBank bank = banks.bank();
-        source.sendFeedback(Text.literal(files.size() + " Chest Tracker files (import with /etracker import <file>):"));
+        source.sendFeedback(Component.literal(files.size() + " Chest Tracker files (import with /etracker import <file>):"));
         for (Path p : files) {
             String mark = bank != null && fromServer(banks, bank, p) ? "  [this server]" : "";
-            source.sendFeedback(Text.literal("- " + p.getFileName() + "  (" + gameDir.relativize(p) + ")" + mark));
+            source.sendFeedback(Component.literal("- " + p.getFileName() + "  (" + gameDir.relativize(p) + ")" + mark));
         }
         if (bank != null && files.stream().filter(p -> fromServer(banks, bank, p)).count() > 1) {
-            source.sendFeedback(Text.literal("/etracker import all imports every [this server] file at once; the newest memory of each container wins."));
+            source.sendFeedback(Component.literal("/etracker import all imports every [this server] file at once; the newest memory of each container wins."));
         }
         return files.size();
     }
@@ -358,7 +357,7 @@ public final class DebugCommand {
      */
     private static int importFile(FabricClientCommandSource source, BankManager banks, String name, boolean confirmed) {
         MemoryBank bank = banks.bank();
-        if (bank == null || MinecraftClient.getInstance().world == null) return fail(source, "No bank open");
+        if (bank == null || Minecraft.getInstance().level == null) return fail(source, "No bank open");
         Path gameDir = FabricLoader.getInstance().getGameDir();
         Path file = ChestTrackerImport.findFiles(gameDir).stream()
                 .filter(p -> p.getFileName().toString().equals(name) || p.getFileName().toString().equals(name + ".nbt"))
@@ -375,7 +374,7 @@ public final class DebugCommand {
     /** Every file named after one of this server's addresses, merged together: the newest memory of each container wins. */
     private static int importAll(FabricClientCommandSource source, BankManager banks) {
         MemoryBank bank = banks.bank();
-        if (bank == null || MinecraftClient.getInstance().world == null) return fail(source, "No bank open");
+        if (bank == null || Minecraft.getInstance().level == null) return fail(source, "No bank open");
         List<Path> files = ChestTrackerImport.findFiles(FabricLoader.getInstance().getGameDir()).stream()
                 .filter(p -> fromServer(banks, bank, p)).toList();
         if (files.isEmpty()) {
@@ -387,10 +386,10 @@ public final class DebugCommand {
 
     /** Reads the files in the background and merges them on the game thread. */
     private static int importFiles(FabricClientCommandSource source, BankManager banks, MemoryBank bank, List<Path> files) {
-        var client = MinecraftClient.getInstance();
-        var registries = client.world.getRegistryManager();
+        var client = Minecraft.getInstance();
+        var registries = client.level.registryAccess();
         String names = files.stream().map(p -> p.getFileName().toString()).collect(Collectors.joining(", "));
-        source.sendFeedback(Text.literal("Importing " + names + " into " + bank.server + "..."));
+        source.sendFeedback(Component.literal("Importing " + names + " into " + bank.server + "..."));
         CompletableFuture.supplyAsync(() -> {
             List<ChestTrackerImport.Result> results = new ArrayList<>();
             for (Path file : files) {
@@ -404,11 +403,11 @@ public final class DebugCommand {
         }).whenComplete((results, error) -> client.execute(() -> {
             if (error != null) {
                 EntityTrackerClient.LOGGER.error("Chest Tracker import of {} failed", names, error);
-                source.sendError(Text.literal("Import failed, nothing was changed: " + error.getCause().getMessage()));
+                source.sendError(Component.literal("Import failed, nothing was changed: " + error.getCause().getMessage()));
                 return;
             }
             if (banks.bank() != bank) {
-                source.sendError(Text.literal("Import cancelled: you left " + bank.server + " while it was reading"));
+                source.sendError(Component.literal("Import cancelled: you left " + bank.server + " while it was reading"));
                 return;
             }
             // All files go in as one list: merge keeps whichever memory of a container is newest,
@@ -423,15 +422,15 @@ public final class DebugCommand {
                 if (ChestTrackerImport.otherVersion(r)) otherVersion = r.dataVersion();
             }
             ChestTrackerImport.MergeResult merged = ChestTrackerImport.merge(bank, records, bank.currentPlayer);
-            source.sendFeedback(Text.literal("Imported from Chest Tracker: " + merged.added() + " new, "
+            source.sendFeedback(Component.literal("Imported from Chest Tracker: " + merged.added() + " new, "
                     + merged.replaced() + " updated, " + merged.keptNewer() + " kept (a newer memory of the same container won). "
                     + items + " stacks. The original " + (files.size() == 1 ? "file was" : "files were") + " not changed."));
             if (raw > 0) {
-                source.sendFeedback(Text.literal(raw + " items aren't known to this game (missing mods?) and were kept as they are."));
+                source.sendFeedback(Component.literal(raw + " items aren't known to this game (missing mods?) and were kept as they are."));
             }
-            if (skipped > 0) source.sendFeedback(Text.literal(skipped + " entries were unreadable and skipped."));
+            if (skipped > 0) source.sendFeedback(Component.literal(skipped + " entries were unreadable and skipped."));
             if (otherVersion != 0) {
-                source.sendFeedback(Text.literal("A file is from another Minecraft version (data version "
+                source.sendFeedback(Component.literal("A file is from another Minecraft version (data version "
                         + otherVersion + "); some items may not show correctly."));
             }
             EntityTrackerClient.LOGGER.info("Imported {} into bank {}: {}, {} stacks", names, bank.key, merged, items);
@@ -480,7 +479,7 @@ public final class DebugCommand {
     }
 
     private static int fail(FabricClientCommandSource source, String message) {
-        source.sendError(Text.literal(message));
+        source.sendError(Component.literal(message));
         return 0;
     }
 }

@@ -133,7 +133,7 @@ Needs JDK 21.
 ```
 
 The jar ends up in `versions/1.21.11/build/libs/`. The project uses
-[Stonecutter](https://stonecutter.kikugie.dev/) and Yarn mappings.
+[Stonecutter](https://stonecutter.kikugie.dev/) and Mojang's official mappings.
 
 ## Credits
 

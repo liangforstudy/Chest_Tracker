@@ -8,18 +8,6 @@ import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.data.TradeData;
 import io.github.liangforstudy.entitytracker.search.ItemIndex;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ItemEnchantmentsComponent;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.village.VillagerProfession;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -27,6 +15,18 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.WeakHashMap;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.npc.villager.VillagerProfession;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -43,7 +43,7 @@ final class TradeView {
         TradeData t = r.trades;
         String kind = t == null || t.profession == null ? TrackerScreen.label(withoutName(r)) : profession(t.profession);
         String level = t != null && t.profession != null && t.level > 0
-                ? Text.translatable("merchant.level." + t.level).getString() : null;
+                ? Component.translatable("merchant.level." + t.level).getString() : null;
         if (r.name != null) return "\"" + r.name + "\" (" + kind + (level != null ? ", " + level : "") + ")";
         return level != null ? kind + " (" + level + ")" : kind;
     }
@@ -56,11 +56,11 @@ final class TradeView {
 
     /** The profession's own display name from the registry (modded ones too), else its id. */
     static String profession(String id) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         Identifier key = Identifier.tryParse(id);
-        if (client.world != null && key != null) {
-            VillagerProfession p = client.world.getRegistryManager().getOrThrow(RegistryKeys.VILLAGER_PROFESSION).get(key);
-            if (p != null) return p.id().getString();
+        if (client.level != null && key != null) {
+            VillagerProfession p = client.level.registryAccess().lookupOrThrow(Registries.VILLAGER_PROFESSION).getValue(key);
+            if (p != null) return p.name().getString();
         }
         return key == null ? id : key.getPath();
     }
@@ -71,7 +71,7 @@ final class TradeView {
         UUID owner = trades.accountOf(s);
         if (bank == null || owner == null || owner.equals(bank.currentPlayer)) return null;
         String name = bank.accounts.get(owner);
-        return Text.translatable("screen.entitytracker.other_account", name != null ? name : owner.toString().substring(0, 8)).getString();
+        return Component.translatable("screen.entitytracker.other_account", name != null ? name : owner.toString().substring(0, 8)).getString();
     }
 
     /** Decoded offers per snapshot; a new look at the villager is a new snapshot object. */
@@ -93,13 +93,13 @@ final class TradeView {
                 TradeData.Offer before = s.previous.stream().filter(p -> same(p, o)).findFirst().orElse(null);
                 int was = before == null ? 0 : decode(before.buy1()).getCount();
                 if (before == null) {
-                    change = Text.translatable("screen.entitytracker.trades.new").getString();
+                    change = Component.translatable("screen.entitytracker.trades.new").getString();
                     color = 0xFF8FE08F;
                 } else if (buy1.getCount() > was) {
-                    change = Text.translatable("screen.entitytracker.trades.price_up", was).getString();
+                    change = Component.translatable("screen.entitytracker.trades.price_up", was).getString();
                     color = 0xFFE8B04A;
                 } else if (buy1.getCount() < was) {
-                    change = Text.translatable("screen.entitytracker.trades.price_down", was).getString();
+                    change = Component.translatable("screen.entitytracker.trades.price_down", was).getString();
                     color = 0xFF8FE08F;
                 }
             }
@@ -129,41 +129,41 @@ final class TradeView {
     }
 
     static ItemStack decode(@Nullable JsonElement json) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (json == null || client.world == null) return ItemStack.EMPTY;
-        return ItemStack.CODEC.parse(client.world.getRegistryManager().getOps(JsonOps.INSTANCE), json).result().orElse(ItemStack.EMPTY);
+        Minecraft client = Minecraft.getInstance();
+        if (json == null || client.level == null) return ItemStack.EMPTY;
+        return ItemStack.CODEC.parse(client.level.registryAccess().createSerializationContext(JsonOps.INSTANCE), json).result().orElse(ItemStack.EMPTY);
     }
 
     /** "Enchanted Book (Mending)", "Iron Axe (Efficiency II)" rather than just the item name. */
     static String describe(ItemStack stack) {
-        String name = stack.getName().getString();
+        String name = stack.getHoverName().getString();
         // Books keep theirs as stored enchantments; tools and armour as enchantments.
-        ItemEnchantmentsComponent stored = stack.get(DataComponentTypes.STORED_ENCHANTMENTS);
-        if (stored == null || stored.isEmpty()) stored = stack.get(DataComponentTypes.ENCHANTMENTS);
+        ItemEnchantments stored = stack.get(DataComponents.STORED_ENCHANTMENTS);
+        if (stored == null || stored.isEmpty()) stored = stack.get(DataComponents.ENCHANTMENTS);
         if (stored == null || stored.isEmpty()) return name;
         List<String> enchants = new ArrayList<>();
-        for (Object2IntMap.Entry<RegistryEntry<Enchantment>> e : stored.getEnchantmentEntries()) {
-            enchants.add(Enchantment.getName(e.getKey(), e.getIntValue()).getString());
+        for (Object2IntMap.Entry<Holder<Enchantment>> e : stored.entrySet()) {
+            enchants.add(Enchantment.getFullname(e.getKey(), e.getIntValue()).getString());
         }
         return name + " (" + String.join(", ", enchants) + ")";
     }
 
-    private static final Identifier TRADE_ARROW = Identifier.ofVanilla("container/villager/trade_arrow");
-    private static final Identifier TRADE_ARROW_OUT_OF_STOCK = Identifier.ofVanilla("container/villager/trade_arrow_out_of_stock");
+    private static final Identifier TRADE_ARROW = Identifier.withDefaultNamespace("container/villager/trade_arrow");
+    private static final Identifier TRADE_ARROW_OUT_OF_STOCK = Identifier.withDefaultNamespace("container/villager/trade_arrow_out_of_stock");
 
     /**
      * The arrow between price and goods, as in the villager's own trade list: a red X when the
      * offer is out of stock. {@code y} is the top of the 16px item row.
      */
-    static void tradeArrow(DrawContext context, int x, int y, boolean outOfStock) {
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, outOfStock ? TRADE_ARROW_OUT_OF_STOCK : TRADE_ARROW,
+    static void tradeArrow(GuiGraphics context, int x, int y, boolean outOfStock) {
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, outOfStock ? TRADE_ARROW_OUT_OF_STOCK : TRADE_ARROW,
                 x, y + 4, 10, 9);
     }
 
     /** "12 Emerald + 1 Book" */
     static String price(ShownOffer o) {
-        String s = o.buy1().getCount() + " " + o.buy1().getName().getString();
-        if (!o.buy2().isEmpty()) s += " + " + o.buy2().getCount() + " " + o.buy2().getName().getString();
+        String s = o.buy1().getCount() + " " + o.buy1().getHoverName().getString();
+        if (!o.buy2().isEmpty()) s += " + " + o.buy2().getCount() + " " + o.buy2().getHoverName().getString();
         return s;
     }
 

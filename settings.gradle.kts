@@ -15,7 +15,7 @@ plugins {
 }
 
 // One Fabric build per Minecraft version. Only 1.21.11 for now; older versions need the
-// NBT item reader (CLAUDE.md 4.5), newer ones drop Yarn.
+// NBT item reader (CLAUDE.md 4.5), 26.x is planned in PORTING-26.2.md.
 stonecutter {
     create(rootProject) {
         versions("1.21.11")

@@ -1,13 +1,13 @@
 package io.github.liangforstudy.entitytracker.gui;
 
 import io.github.liangforstudy.entitytracker.data.ContainerRecord;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.util.Identifier;
-import net.minecraft.world.dimension.DimensionType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Locale;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.dimension.DimensionType;
 
 /**
  * Converting positions between dimensions (CLAUDE.md 4.1e), like JourneyMap's nether/overworld
@@ -19,17 +19,17 @@ public final class Dimensions {
     private Dimensions() {}
 
     public static @Nullable String current() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        return client.world == null ? null : client.world.getRegistryKey().getValue().toString();
+        Minecraft client = Minecraft.getInstance();
+        return client.level == null ? null : client.level.dimension().identifier().toString();
     }
 
     /** Coordinate scale of a dimension, or NaN when unknown. */
     static double scale(String dimension) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null) return Double.NaN;
-        if (dimension.equals(current())) return client.world.getDimension().coordinateScale();
-        return client.world.getRegistryManager().getOptional(RegistryKeys.DIMENSION_TYPE)
-                .flatMap(r -> r.getOptionalValue(Identifier.of(dimension)))
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null) return Double.NaN;
+        if (dimension.equals(current())) return client.level.dimensionType().coordinateScale();
+        return client.level.registryAccess().lookup(Registries.DIMENSION_TYPE)
+                .flatMap(r -> r.getOptional(Identifier.parse(dimension)))
                 .map(DimensionType::coordinateScale)
                 .orElse(dimension.equals("minecraft:the_nether") ? 8.0 : Double.NaN);
     }
@@ -54,7 +54,7 @@ public final class Dimensions {
 
     /** Horizontal distance from the player to the converted position, or NaN. */
     public static double convertedDistance(ContainerRecord r) {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         double[] p = inCurrent(r);
         if (p == null || client.player == null) return Double.NaN;
         double dx = p[0] - client.player.getX();
@@ -69,7 +69,7 @@ public final class Dimensions {
             case "minecraft:the_nether" -> "Nether";
             case "minecraft:the_end" -> "End";
             default -> {
-                String path = Identifier.of(dimension).getPath().replace('_', ' ');
+                String path = Identifier.parse(dimension).getPath().replace('_', ' ');
                 yield path.isEmpty() ? dimension : path.substring(0, 1).toUpperCase(Locale.ROOT) + path.substring(1);
             }
         };

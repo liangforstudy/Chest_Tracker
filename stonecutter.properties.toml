@@ -8,7 +8,6 @@ deps.fabric_loader = "0.19.5"
 
 ["1.21.11"]
 mod.mc_compat = "~1.21.11"
-deps.yarn = "1.21.11+build.6"
 deps.fabric_api = "0.141.6+1.21.11"
 deps.mcpfabric = "0.8.0+1.21.11"
 deps.shulkerboxtooltip = "5.2.16+1.21.11-fabric"

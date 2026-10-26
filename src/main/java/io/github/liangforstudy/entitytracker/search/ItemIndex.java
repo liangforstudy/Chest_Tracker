@@ -4,25 +4,23 @@ import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 import io.github.liangforstudy.entitytracker.EntityTrackerClient;
 import io.github.liangforstudy.entitytracker.data.ContainerRecord;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.BundleContentsComponent;
-import net.minecraft.component.type.ContainerComponent;
-import net.minecraft.component.type.LoreComponent;
-import net.minecraft.component.type.WritableBookContentComponent;
-import net.minecraft.component.type.WrittenBookContentComponent;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.tooltip.TooltipType;
-import net.minecraft.registry.Registries;
-import net.minecraft.text.Text;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.item.component.BundleContents;
+import net.minecraft.world.item.component.ItemContainerContents;
+import net.minecraft.world.item.component.ItemLore;
+import net.minecraft.world.item.component.WritableBookContent;
+import net.minecraft.world.item.component.WrittenBookContent;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -85,8 +83,8 @@ public final class ItemIndex {
     public @Nullable List<IndexedItem> itemsWithin(ContainerRecord record, long deadline) {
         List<IndexedItem> cached = cachedItems(record);
         if (cached != null) return cached;
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null) return List.of();
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null) return List.of();
         if (expansions.size() > MAX_EXPANSIONS) expansions.clear();
         Partial p = partial.get(record.key());
         if (p == null || p.lastOpened != record.lastOpened) {
@@ -134,53 +132,53 @@ public final class ItemIndex {
     }
 
     /** One stack and everything nested in it; slot -1 (filled in per copy). */
-    private static List<IndexedItem> expand(JsonElement json, MinecraftClient client) {
+    private static List<IndexedItem> expand(JsonElement json, Minecraft client) {
         List<IndexedItem> out = new ArrayList<>();
-        var ops = client.world.getRegistryManager().getOps(JsonOps.INSTANCE);
-        Item.TooltipContext context = Item.TooltipContext.create(client.world);
+        var ops = client.level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
+        Item.TooltipContext context = Item.TooltipContext.of(client.level);
         // Items that no longer decode (e.g. from a removed mod) are skipped here but stay on disk.
         ItemStack.CODEC.parse(ops, json).result().ifPresent(stack -> add(out, stack, -1, List.of(), context, client, 0));
         return out;
     }
 
     private static void add(List<IndexedItem> out, ItemStack stack, int slot, List<String> path,
-                            Item.TooltipContext context, MinecraftClient client, int depth) {
+                            Item.TooltipContext context, Minecraft client, int depth) {
         String text = searchText(stack, context, client);
         out.add(new IndexedItem(stack, slot, path, text, Fuzzy.words(text), bookText(stack)));
         if (depth >= MAX_DEPTH) return;
 
         List<String> inner = new ArrayList<>(path);
-        inner.add(stack.getName().getString());
-        ContainerComponent container = stack.get(DataComponentTypes.CONTAINER);
+        inner.add(stack.getHoverName().getString());
+        ItemContainerContents container = stack.get(DataComponents.CONTAINER);
         if (container != null) {
-            for (ItemStack child : container.iterateNonEmpty()) add(out, child, slot, inner, context, client, depth + 1);
+            for (ItemStack child : container.nonEmptyItems()) add(out, child, slot, inner, context, client, depth + 1);
         }
-        BundleContentsComponent bundle = stack.get(DataComponentTypes.BUNDLE_CONTENTS);
+        BundleContents bundle = stack.get(DataComponents.BUNDLE_CONTENTS);
         if (bundle != null) {
-            for (ItemStack child : bundle.iterate()) add(out, child, slot, inner, context, client, depth + 1);
+            for (ItemStack child : bundle.items()) add(out, child, slot, inner, context, client, depth + 1);
         }
     }
 
     /** Whether a stack, or anything inside it (shulker, bundle), matches a lowercase query. */
     public static boolean matchesDeep(ItemStack stack, String query, int depth) {
         if (query.isEmpty()) return false;
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null) return false;
-        if (searchText(stack, Item.TooltipContext.create(client.world), client).contains(query)) return true;
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null) return false;
+        if (searchText(stack, Item.TooltipContext.of(client.level), client).contains(query)) return true;
         if (bookText(stack).contains(query)) return true;
         if (depth >= MAX_DEPTH) return false;
-        ContainerComponent container = stack.get(DataComponentTypes.CONTAINER);
-        if (container != null) for (ItemStack c : container.iterateNonEmpty()) if (matchesDeep(c, query, depth + 1)) return true;
-        BundleContentsComponent bundle = stack.get(DataComponentTypes.BUNDLE_CONTENTS);
-        if (bundle != null) for (ItemStack c : bundle.iterate()) if (matchesDeep(c, query, depth + 1)) return true;
+        ItemContainerContents container = stack.get(DataComponents.CONTAINER);
+        if (container != null) for (ItemStack c : container.nonEmptyItems()) if (matchesDeep(c, query, depth + 1)) return true;
+        BundleContents bundle = stack.get(DataComponents.BUNDLE_CONTENTS);
+        if (bundle != null) for (ItemStack c : bundle.items()) if (matchesDeep(c, query, depth + 1)) return true;
         return false;
     }
 
     /** Search text for a single stack (trade offers); empty for an empty stack. */
     public static String searchText(ItemStack stack) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (stack.isEmpty() || client.world == null) return "";
-        return searchText(stack, Item.TooltipContext.create(client.world), client);
+        Minecraft client = Minecraft.getInstance();
+        if (stack.isEmpty() || client.level == null) return "";
+        return searchText(stack, Item.TooltipContext.of(client.level), client);
     }
 
     /**
@@ -188,8 +186,8 @@ public final class ItemIndex {
      * Title and author are in the tooltip already (searchText).
      */
     public static String bookText(ItemStack stack) {
-        WrittenBookContentComponent written = stack.get(DataComponentTypes.WRITTEN_BOOK_CONTENT);
-        WritableBookContentComponent writable = stack.get(DataComponentTypes.WRITABLE_BOOK_CONTENT);
+        WrittenBookContent written = stack.get(DataComponents.WRITTEN_BOOK_CONTENT);
+        WritableBookContent writable = stack.get(DataComponents.WRITABLE_BOOK_CONTENT);
         if (written == null && writable == null) return "";
         StringBuilder sb = new StringBuilder();
         if (written != null) {
@@ -201,8 +199,8 @@ public final class ItemIndex {
     }
 
     /** Tooltip lines cover custom name, lore, enchantments and effects; the id covers the rest. */
-    private static String searchText(ItemStack stack, Item.TooltipContext context, MinecraftClient client) {
-        StringBuilder sb = new StringBuilder(Registries.ITEM.getId(stack.getItem()).toString());
+    private static String searchText(ItemStack stack, Item.TooltipContext context, Minecraft client) {
+        StringBuilder sb = new StringBuilder(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
         // The type's own name too, so "shulker box" also finds one renamed "Kit".
         sb.append('\n').append(stack.getItem().getName().getString());
         // Heads: profile name and texture (plus its alias) are searchable even after renaming,
@@ -216,21 +214,21 @@ public final class ItemIndex {
                 if (alias != null) sb.append('\n').append(alias).append("\nheadtex:").append(alias);
             }
         }
-        if (stack.contains(DataComponentTypes.CONTAINER) || stack.contains(DataComponentTypes.BUNDLE_CONTENTS)) {
+        if (stack.has(DataComponents.CONTAINER) || stack.has(DataComponents.BUNDLE_CONTENTS)) {
             // A shulker/bundle tooltip lists its contents, which are indexed as their own entries;
             // match only the container's own name and lore so results aren't doubled.
-            sb.append('\n').append(stack.getName().getString());
-            LoreComponent lore = stack.get(DataComponentTypes.LORE);
-            if (lore != null) for (Text line : lore.lines()) sb.append('\n').append(line.getString());
+            sb.append('\n').append(stack.getHoverName().getString());
+            ItemLore lore = stack.get(DataComponents.LORE);
+            if (lore != null) for (Component line : lore.lines()) sb.append('\n').append(line.getString());
             return sb.toString().toLowerCase(Locale.ROOT);
         }
         try {
-            for (Text line : stack.getTooltip(context, client.player, TooltipType.BASIC)) {
+            for (Component line : stack.getTooltipLines(context, client.player, TooltipFlag.NORMAL)) {
                 sb.append('\n').append(line.getString());
             }
         } catch (RuntimeException e) {
             // A mod's tooltip code failing must not break search; fall back to the name.
-            sb.append('\n').append(stack.getName().getString());
+            sb.append('\n').append(stack.getHoverName().getString());
         }
         return sb.toString().toLowerCase(Locale.ROOT);
     }

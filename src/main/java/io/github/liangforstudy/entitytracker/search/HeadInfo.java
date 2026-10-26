@@ -4,13 +4,13 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * Profile name and skin texture hash of a player head (CLAUDE.md 4.5), read from the item's
@@ -19,10 +19,10 @@ import java.util.Base64;
  */
 public record HeadInfo(@Nullable String profileName, @Nullable String textureHash) {
     public static @Nullable HeadInfo of(ItemStack stack) {
-        if (!stack.contains(DataComponentTypes.PROFILE)) return null;
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null) return null;
-        JsonElement encoded = ItemStack.CODEC.encodeStart(client.world.getRegistryManager().getOps(JsonOps.INSTANCE), stack)
+        if (!stack.has(DataComponents.PROFILE)) return null;
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null) return null;
+        JsonElement encoded = ItemStack.CODEC.encodeStart(client.level.registryAccess().createSerializationContext(JsonOps.INSTANCE), stack)
                 .result().orElse(null);
         if (encoded == null || !encoded.isJsonObject()) return null;
         JsonObject components = encoded.getAsJsonObject().getAsJsonObject("components");

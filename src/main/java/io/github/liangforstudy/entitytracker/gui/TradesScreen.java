@@ -7,17 +7,6 @@ import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.data.TradeData;
 import io.github.liangforstudy.entitytracker.search.Fuzzy;
 import io.github.liangforstudy.entitytracker.track.Trash;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.AlwaysSelectedEntryListWidget;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.ScreenTexts;
-import net.minecraft.text.Text;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
@@ -25,6 +14,17 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.ObjectSelectionList;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.CommonComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * The shops the player has seen (CLAUDE.md 4.11), kept apart from the storage search so offers
@@ -36,7 +36,7 @@ public final class TradesScreen extends Screen {
     /** Width of the "price -> goods" icons at the end of an offer row. */
     private static final int STRIP_WIDTH = 72;
 
-    private TextFieldWidget search;
+    private EditBox search;
     private ResultList list;
     /** false = remembered villagers, true = the trash. */
     private boolean trashView;
@@ -45,7 +45,7 @@ public final class TradesScreen extends Screen {
     /** Wandering traders come and go; this hides them all at once. Kept while the game runs. */
     private static boolean showWandering = true;
     /** The open row menu (right-click or the row's "⋮"), empty when closed. */
-    private final List<ButtonWidget> menu = new ArrayList<>();
+    private final List<Button> menu = new ArrayList<>();
     private int menuX, menuY, menuW, menuH;
 
     private final String initialQuery;
@@ -56,41 +56,41 @@ public final class TradesScreen extends Screen {
 
     /** Opens already searching for {@code query} (/offers mending). */
     public TradesScreen(String query) {
-        super(Text.translatable("screen.entitytracker.trades.title"));
+        super(Component.translatable("screen.entitytracker.trades.title"));
         this.initialQuery = query;
     }
 
     @Override
     protected void init() {
         int fieldWidth = Math.min(300, width - 32);
-        String previous = search != null ? search.getText() : initialQuery;
-        search = new TextFieldWidget(textRenderer, (width - fieldWidth) / 2, 24, fieldWidth, 20,
-                Text.translatable("screen.entitytracker.trades.search"));
-        search.setPlaceholder(Text.translatable("screen.entitytracker.trades.search"));
-        search.setText(previous);
-        search.setChangedListener(q -> refresh());
-        addDrawableChild(search);
+        String previous = search != null ? search.getValue() : initialQuery;
+        search = new EditBox(font, (width - fieldWidth) / 2, 24, fieldWidth, 20,
+                Component.translatable("screen.entitytracker.trades.search"));
+        search.setHint(Component.translatable("screen.entitytracker.trades.search"));
+        search.setValue(previous);
+        search.setResponder(q -> refresh());
+        addRenderableWidget(search);
 
-        list = new ResultList(client, width, height - 30 - TrackerScreen.LIST_Y, TrackerScreen.LIST_Y);
-        addDrawableChild(list);
-        for (ButtonWidget tab : ScreenTabs.create(client, width, true)) addDrawableChild(tab);
+        list = new ResultList(minecraft, width, height - 30 - TrackerScreen.LIST_Y, TrackerScreen.LIST_Y);
+        addRenderableWidget(list);
+        for (Button tab : ScreenTabs.create(minecraft, width, true)) addRenderableWidget(tab);
 
-        List<ButtonWidget.Builder> bar = List.of(
-                ButtonWidget.builder(trashLabel(), b -> {
+        List<Button.Builder> bar = List.of(
+                Button.builder(trashLabel(), b -> {
                     trashView = !trashView;
-                    clearAndInit();
+                    rebuildWidgets();
                 }),
-                ButtonWidget.builder(wanderingLabel(), b -> {
+                Button.builder(wanderingLabel(), b -> {
                     showWandering = !showWandering;
                     b.setMessage(wanderingLabel());
                     refresh();
                 }),
-                ButtonWidget.builder(ScreenTexts.DONE, b -> close()));
+                Button.builder(CommonComponents.GUI_DONE, b -> onClose()));
         menu.clear();
         int w = Math.min(120, (width - 40) / bar.size());
         int x = width / 2 - (w * bar.size() + 4 * (bar.size() - 1)) / 2;
-        for (ButtonWidget.Builder b : bar) {
-            addDrawableChild(b.dimensions(x, height - 26, w, 20).build());
+        for (Button.Builder b : bar) {
+            addRenderableWidget(b.bounds(x, height - 26, w, 20).build());
             x += w + 4;
         }
         setInitialFocus(search);
@@ -98,7 +98,7 @@ public final class TradesScreen extends Screen {
     }
 
     private void refresh() {
-        String query = TradeView.query(search.getText());
+        String query = TradeView.query(search.getValue());
         fuzzy = false;
         List<Row> rows = rows(query, false);
         if (rows.isEmpty() && !query.isEmpty()) {
@@ -145,15 +145,15 @@ public final class TradesScreen extends Screen {
     }
 
     /** "Trash (3)" in the list, "<- Back to list" in the trash. */
-    private Text trashLabel() {
-        if (trashView) return Text.translatable("screen.entitytracker.trash_back");
+    private Component trashLabel() {
+        if (trashView) return Component.translatable("screen.entitytracker.trash_back");
         MemoryBank bank = EntityTrackerClient.banks().bank();
         long n = bank == null ? 0 : bank.traders().filter(EntityRecord::isTrashed).count();
-        return Text.translatable("screen.entitytracker.trash_open", n);
+        return Component.translatable("screen.entitytracker.trash_open", n);
     }
 
-    private static Text wanderingLabel() {
-        return Text.translatable(showWandering ? "screen.entitytracker.trades.wandering_shown"
+    private static Component wanderingLabel() {
+        return Component.translatable(showWandering ? "screen.entitytracker.trades.wandering_shown"
                 : "screen.entitytracker.trades.wandering_hidden");
     }
 
@@ -164,29 +164,29 @@ public final class TradesScreen extends Screen {
     /** Row menu: mark destroyed (to the trash, e.g. a wandering trader that left) or restore. */
     private void openMenu(EntityRecord record, double x, double y) {
         closeMenu();
-        ButtonWidget.Builder item = ButtonWidget.builder(record.isTrashed()
-                ? Text.translatable("screen.entitytracker.restore") : TrackerScreen.markLabel(record), b -> {
+        Button.Builder item = Button.builder(record.isTrashed()
+                ? Component.translatable("screen.entitytracker.restore") : TrackerScreen.markLabel(record), b -> {
             closeMenu();
             MemoryBank bank = EntityTrackerClient.banks().bank();
             if (bank == null) return;
             if (record.isTrashed()) Trash.restore(bank, record);
             else Trash.trash(bank, record);
-            clearAndInit(); // also updates the trash count
+            rebuildWidgets(); // also updates the trash count
         });
         menuW = 120;
         menuH = 20;
         menuX = (int) Math.min(x, width - menuW - 4);
         menuY = (int) Math.min(y, height - menuH - 4);
-        menu.add(addDrawableChild(item.dimensions(menuX, menuY, menuW, menuH).build()));
+        menu.add(addRenderableWidget(item.bounds(menuX, menuY, menuW, menuH).build()));
     }
 
     private void closeMenu() {
-        for (ButtonWidget b : menu) remove(b);
+        for (Button b : menu) removeWidget(b);
         menu.clear();
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (!menu.isEmpty()) {
             boolean inside = click.x() >= menuX && click.x() < menuX + menuW && click.y() >= menuY && click.y() < menuY + menuH;
             if (inside) return super.mouseClicked(click, doubled);
@@ -209,45 +209,45 @@ public final class TradesScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
+    public boolean keyPressed(KeyEvent input) {
         if (input.key() == GLFW.GLFW_KEY_ESCAPE && !menu.isEmpty()) {
             closeMenu();
             return true;
         }
-        if (input.key() == GLFW.GLFW_KEY_ESCAPE && !search.getText().isEmpty()) {
-            search.setText("");
+        if (input.key() == GLFW.GLFW_KEY_ESCAPE && !search.getValue().isEmpty()) {
+            search.setValue("");
             return true;
         }
         return super.keyPressed(input);
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);
         ScreenTabs.drawUnderline(context, width, true);
-        if (fuzzy) TrackerScreen.drawFuzzyNote(context, textRenderer, search);
-        context.drawCenteredTextWithShadow(textRenderer, trashView
-                ? Text.translatable("screen.entitytracker.hint.trash", Settings.trashDays)
-                : Text.translatable("screen.entitytracker.hint.trades"), width / 2, 48, trashView ? 0xFFE8B04A : 0xFFB0B0B0);
+        if (fuzzy) TrackerScreen.drawFuzzyNote(context, font, search);
+        context.drawCenteredString(font, trashView
+                ? Component.translatable("screen.entitytracker.hint.trash", Settings.trashDays)
+                : Component.translatable("screen.entitytracker.hint.trades"), width / 2, 48, trashView ? 0xFFE8B04A : 0xFFB0B0B0);
         if (EntityTrackerClient.banks().bank() == null) {
-            context.drawCenteredTextWithShadow(textRenderer, Text.translatable(EntityTrackerClient.banks().isLoading()
+            context.drawCenteredString(font, Component.translatable(EntityTrackerClient.banks().isLoading()
                     ? "screen.entitytracker.loading" : "screen.entitytracker.no_bank"),
                     width / 2, height / 2, 0xFFAAAAAA);
         } else if (list.children().isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer, Text.translatable(search.getText().isBlank() && !trashView
+            context.drawCenteredString(font, Component.translatable(search.getValue().isBlank() && !trashView
                     ? "screen.entitytracker.trades.none_yet" : "screen.entitytracker.no_results"), width / 2, height / 2, 0xFFAAAAAA);
         }
     }
 
     /** Darker than the vanilla backdrop, so grey text stays readable over a bright sky. */
     @Override
-    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
         super.renderBackground(context, mouseX, mouseY, delta);
         context.fill(0, 0, width, height, TrackerScreen.BACKDROP);
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 
@@ -255,18 +255,18 @@ public final class TradesScreen extends Screen {
     private record Row(EntityRecord record, @Nullable TradeData.Snapshot snapshot, List<TradeView.ShownOffer> offers,
                        @Nullable TradeView.ShownOffer offer) {}
 
-    private final class ResultList extends AlwaysSelectedEntryListWidget<ResultList.Entry> {
-        ResultList(MinecraftClient client, int width, int height, int y) {
+    private final class ResultList extends ObjectSelectionList<ResultList.Entry> {
+        ResultList(Minecraft client, int width, int height, int y) {
             super(client, width, height, y, ROW_HEIGHT);
         }
 
-        Entry entryAt(double x, double y) {
+        io.github.liangforstudy.entitytracker.gui.TradesScreen.ResultList.Entry entryAt(double x, double y) {
             return getEntryAtPosition(x, y);
         }
 
         void setRows(List<Row> rows) {
-            replaceEntries(rows.stream().map(Entry::new).toList());
-            setScrollY(0);
+            replaceEntries(rows.stream().map(io.github.liangforstudy.entitytracker.gui.TradesScreen.ResultList.Entry::new).toList());
+            setScrollAmount(0);
         }
 
         @Override
@@ -274,7 +274,7 @@ public final class TradesScreen extends Screen {
             return Math.min(520, width - 30);
         }
 
-        final class Entry extends AlwaysSelectedEntryListWidget.Entry<Entry> {
+        final class Entry extends ObjectSelectionList.Entry<io.github.liangforstudy.entitytracker.gui.TradesScreen.ResultList.Entry> {
             private final Row row;
             private final ItemStack traderIcon;
 
@@ -284,7 +284,7 @@ public final class TradesScreen extends Screen {
             }
 
             @Override
-            public void render(DrawContext context, int mouseX, int mouseY, boolean hovered, float delta) {
+            public void renderContent(GuiGraphics context, int mouseX, int mouseY, boolean hovered, float delta) {
                 int x = getContentX(), y = getContentY();
                 int textX = x + 24, maxWidth = getRowWidth() - 30;
                 EntityRecord r = row.record();
@@ -296,20 +296,20 @@ public final class TradesScreen extends Screen {
                     hoveredStack = strip(context, o, sx, y + 13, mouseX, mouseY, hoveredStack);
                     maxWidth = sx - 8 - textX;
                 }
-                context.drawTextWithShadow(textRenderer, "⋮", x + getRowWidth() - 10, y + 17,
+                context.drawString(font, "⋮", x + getRowWidth() - 10, y + 17,
                         hovered ? 0xFFFFFFFF : 0xFF888888);
                 int lineY = y + 3;
                 List<TrackerScreen.Note> notes = new ArrayList<>();
                 if (o != null) {
                     // Offer row: what it sells and for how much / who sells it / where / notes.
-                    context.drawItem(o.sell(), x + 2, y + 3);
-                    context.drawStackOverlay(textRenderer, o.sell(), x + 2, y + 3);
-                    context.drawItem(traderIcon, x + 2, y + 23);
+                    context.renderItem(o.sell(), x + 2, y + 3);
+                    context.renderItemDecorations(font, o.sell(), x + 2, y + 3);
+                    context.renderItem(traderIcon, x + 2, y + 23);
                     draw(context, TradeView.sold(o) + "  ←  " + TradeView.price(o), textX, lineY, maxWidth, 0xFFFFFFFF);
                     lineY += 11;
                     draw(context, TradeView.label(r), textX, lineY, maxWidth, 0xFFDDDDDD);
                     if (o.offer().outOfStock()) {
-                        notes.add(new TrackerScreen.Note(Text.translatable("screen.entitytracker.trades.out_of_stock").getString(),
+                        notes.add(new TrackerScreen.Note(Component.translatable("screen.entitytracker.trades.out_of_stock").getString(),
                                 0xFFE07070, null));
                     }
                     if (o.change() != null) notes.add(new TrackerScreen.Note(o.change(), o.changeColor(), null));
@@ -318,7 +318,7 @@ public final class TradesScreen extends Screen {
                     // (price -> goods, two at a time) at the end of the row. With more than two
                     // they move up one step every Settings.tradePreviewTicks, like a ticker: 1-2, 2-3,
                     // 3-1, ... Both slots stay filled and every offer moves the same way (up).
-                    context.drawItem(traderIcon, x + 2, y + 3);
+                    context.renderItem(traderIcon, x + 2, y + 3);
                     int n = row.offers().size();
                     int stripsX = x + getRowWidth() - 16 - STRIP_WIDTH;
                     int step = n <= 2 ? 0
@@ -328,15 +328,15 @@ public final class TradesScreen extends Screen {
                         hoveredStack = strip(context, offer, stripsX, y + 3 + k * 20, mouseX, mouseY, hoveredStack);
                     }
                     if (n > 0) maxWidth = stripsX - 8 - textX;
-                    String count = row.snapshot() == null ? Text.translatable("screen.entitytracker.never_opened").getString()
-                            : Text.translatable(row.offers().size() == 1 ? "screen.entitytracker.trades.offer"
+                    String count = row.snapshot() == null ? Component.translatable("screen.entitytracker.never_opened").getString()
+                            : Component.translatable(row.offers().size() == 1 ? "screen.entitytracker.trades.offer"
                                     : "screen.entitytracker.trades.offers", row.offers().size()).getString();
                     draw(context, TradeView.label(r) + " · " + count, textX, lineY, maxWidth, 0xFFFFFFFF);
                     lineY += 11;
                     List<String> sold = row.offers().stream().map(TradeView::sold).toList();
                     draw(context, String.join(", ", sold), textX, lineY, maxWidth, 0xFFDDDDDD);
                     int gone = TradeView.gone(row.snapshot());
-                    if (gone > 0) notes.add(new TrackerScreen.Note(Text.translatable("screen.entitytracker.trades.gone", gone).getString(),
+                    if (gone > 0) notes.add(new TrackerScreen.Note(Component.translatable("screen.entitytracker.trades.gone", gone).getString(),
                             0xFFE8B04A, null));
                 }
                 lineY += 11;
@@ -356,11 +356,11 @@ public final class TradesScreen extends Screen {
                 if (hovered && o != null && mouseX >= x + 2 && mouseX < x + 18 && mouseY >= y + 3 && mouseY < y + 19) {
                     hoveredStack = o.sell();
                 }
-                if (hovered && hoveredStack != null) context.drawItemTooltip(textRenderer, hoveredStack, mouseX, mouseY);
+                if (hovered && hoveredStack != null) context.setTooltipForNextFrame(font, hoveredStack, mouseX, mouseY);
             }
 
             /** price (+ second price) -> goods, as in the villager's own screen; returns the hovered stack. */
-            private ItemStack strip(DrawContext context, TradeView.ShownOffer o, int sx, int sy, int mouseX, int mouseY,
+            private ItemStack strip(GuiGraphics context, TradeView.ShownOffer o, int sx, int sy, int mouseX, int mouseY,
                                     ItemStack hoveredSoFar) {
                 // Each offer on its own faint box, like the trade buttons in the villager's screen.
                 context.fill(sx - 3, sy - 1, sx + STRIP_WIDTH - 1, sy + 17, 0x30FFFFFF);
@@ -371,37 +371,37 @@ public final class TradesScreen extends Screen {
             }
 
             /** One icon of the trade strip, with its count; returns the stack if the mouse is on it. */
-            private ItemStack stripItem(DrawContext context, ItemStack stack, int x, int y, int mouseX, int mouseY,
+            private ItemStack stripItem(GuiGraphics context, ItemStack stack, int x, int y, int mouseX, int mouseY,
                                         ItemStack hoveredSoFar) {
-                context.drawItem(stack, x, y);
-                context.drawStackOverlay(textRenderer, stack, x, y);
+                context.renderItem(stack, x, y);
+                context.renderItemDecorations(font, stack, x, y);
                 return mouseX >= x && mouseX < x + 16 && mouseY >= y && mouseY < y + 16 ? stack : hoveredSoFar;
             }
 
             /** Draws text cut to fit; returns its width. */
-            private int draw(DrawContext context, String s, int x, int y, int maxWidth, int color) {
-                if (textRenderer.getWidth(s) > maxWidth) {
-                    s = textRenderer.trimToWidth(s, Math.max(0, maxWidth - textRenderer.getWidth("..."))) + "...";
+            private int draw(GuiGraphics context, String s, int x, int y, int maxWidth, int color) {
+                if (font.width(s) > maxWidth) {
+                    s = font.plainSubstrByWidth(s, Math.max(0, maxWidth - font.width("..."))) + "...";
                 }
-                context.drawTextWithShadow(textRenderer, s, x, y, color);
-                return textRenderer.getWidth(s);
+                context.drawString(font, s, x, y, color);
+                return font.width(s);
             }
 
             @Override
-            public boolean mouseClicked(Click click, boolean doubled) {
+            public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
                 ResultList.this.setSelected(this);
                 // The "⋮" at the end of the row opens the menu with a plain tap (touch screens).
                 if (click.x() >= getContentX() + getRowWidth() - 16) {
                     openMenu(row.record(), click.x(), click.y());
                     return true;
                 }
-                client.setScreen(new TradeDetailScreen(row.record(), TradesScreen.this, TradeView.query(search.getText())));
+                minecraft.setScreen(new TradeDetailScreen(row.record(), TradesScreen.this, TradeView.query(search.getValue())));
                 return true;
             }
 
             @Override
-            public Text getNarration() {
-                return Text.literal(TradeView.label(row.record()));
+            public Component getNarration() {
+                return Component.literal(TradeView.label(row.record()));
             }
         }
     }
