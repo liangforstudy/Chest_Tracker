@@ -1,11 +1,10 @@
 package io.github.liangforstudy.entitytracker.gui;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.Text;
-
 import java.util.List;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.network.chat.Component;
 
 /**
  * "Storage | Trades" tabs at the top of both screens, in the same place on each, so switching is
@@ -16,18 +15,18 @@ final class ScreenTabs {
 
     private ScreenTabs() {}
 
-    static List<ButtonWidget> create(MinecraftClient client, int screenWidth, boolean trades) {
+    static List<Button> create(Minecraft client, int screenWidth, boolean trades) {
         int x = screenWidth / 2 - WIDTH - 2;
-        ButtonWidget storage = ButtonWidget.builder(Text.translatable("screen.entitytracker.tab.storage"),
-                b -> client.setScreen(new TrackerScreen())).dimensions(x, Y, WIDTH, HEIGHT).build();
-        ButtonWidget offers = ButtonWidget.builder(Text.translatable("screen.entitytracker.tab.trades"),
-                b -> client.setScreen(new TradesScreen())).dimensions(x + WIDTH + 4, Y, WIDTH, HEIGHT).build();
+        Button storage = Button.builder(Component.translatable("screen.entitytracker.tab.storage"),
+                b -> client.setScreen(new TrackerScreen())).bounds(x, Y, WIDTH, HEIGHT).build();
+        Button offers = Button.builder(Component.translatable("screen.entitytracker.tab.trades"),
+                b -> client.setScreen(new TradesScreen())).bounds(x + WIDTH + 4, Y, WIDTH, HEIGHT).build();
         storage.active = trades;
         offers.active = !trades;
         return List.of(storage, offers);
     }
 
-    static void drawUnderline(DrawContext context, int screenWidth, boolean trades) {
+    static void drawUnderline(GuiGraphics context, int screenWidth, boolean trades) {
         int x = screenWidth / 2 - WIDTH - 2 + (trades ? WIDTH + 4 : 0);
         context.fill(x + 4, Y + HEIGHT, x + WIDTH - 4, Y + HEIGHT + 1, 0xFFFFFFFF);
     }

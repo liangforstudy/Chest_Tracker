@@ -8,19 +8,19 @@ import io.github.liangforstudy.entitytracker.data.EntityRecord;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.data.TradeData;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.MerchantScreen;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.passive.MerchantEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.RegistryOps;
-import net.minecraft.screen.MerchantScreenHandler;
-import net.minecraft.text.Text;
-import net.minecraft.village.TradeOffer;
-import net.minecraft.village.VillagerData;
-import net.minecraft.village.VillagerDataContainer;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.MerchantScreen;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.RegistryOps;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.npc.villager.AbstractVillager;
+import net.minecraft.world.entity.npc.villager.VillagerData;
+import net.minecraft.world.entity.npc.villager.VillagerDataHolder;
+import net.minecraft.world.inventory.MerchantMenu;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.trading.MerchantOffer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -40,7 +40,7 @@ public final class TradeBinder {
     private final Map<Screen, Boolean> seen = new WeakHashMap<>();
 
     private static final class Bound {
-        final MerchantScreenHandler handler;
+        final MerchantMenu handler;
         final EntityRecord record;
         final UUID account;
         /** What this account saw before this opening, for the change marks. */
@@ -48,7 +48,7 @@ public final class TradeBinder {
         /** Set once the offers have arrived; closing before that keeps the old ones. */
         boolean synced;
 
-        Bound(MerchantScreenHandler handler, EntityRecord record, UUID account, @Nullable List<TradeData.Offer> previous) {
+        Bound(MerchantMenu handler, EntityRecord record, UUID account, @Nullable List<TradeData.Offer> previous) {
             this.handler = handler;
             this.record = record;
             this.account = account;
@@ -69,15 +69,15 @@ public final class TradeBinder {
             if (!(screen instanceof MerchantScreen merchantScreen) || seen.containsKey(screen)) return;
             seen.put(screen, Boolean.TRUE);
             MemoryBank bank = banks.bank();
-            ClientWorld world = client.world;
+            ClientLevel world = client.level;
             if (!Settings.trackTrades || bank == null || world == null || bank.currentPlayer == null) return;
-            MerchantScreenHandler handler = merchantScreen.getScreenHandler();
+            MerchantMenu handler = merchantScreen.getMenu();
             Entity merchant = find(world, screen.getTitle());
-            EntityTrackerClient.LOGGER.debug("Merchant screen {} opened, bound to {}", handler.syncId,
-                    merchant == null ? null : merchant.getUuid());
+            EntityTrackerClient.LOGGER.debug("Merchant screen {} opened, bound to {}", handler.containerId,
+                    merchant == null ? null : merchant.getUUID());
             if (merchant == null) return;
 
-            EntityRecord record = bank.getOrCreate(merchant.getUuid());
+            EntityRecord record = bank.getOrCreate(merchant.getUUID());
             if (record.trades == null) record.trades = new TradeData();
             positions.update(record, merchant, world, true);
             readVillager(record.trades, merchant);
@@ -87,16 +87,16 @@ public final class TradeBinder {
             bank.markDirty();
             ScreenEvents.remove(screen).register(closed -> {
                 // Uses go up while trading; the client's copy of the offers follows them.
-                if (bound.synced) snapshot(bound, handler.getRecipes());
+                if (bound.synced) snapshot(bound, handler.getOffers());
                 if (current == bound) current = null;
             });
         });
     }
 
     /** The offers arrived (right after the screen opened, and again after a restock or level-up). */
-    public void onOffers(int syncId, List<TradeOffer> offers) {
+    public void onOffers(int syncId, List<MerchantOffer> offers) {
         Bound bound = current;
-        if (bound == null || bound.handler.syncId != syncId) return;
+        if (bound == null || bound.handler.containerId != syncId) return;
         bound.synced = true;
         snapshot(bound, offers);
     }
@@ -105,13 +105,13 @@ public final class TradeBinder {
      * The oldest fresh click on a merchant whose name is the screen title, else the only clicked
      * merchant. Several clicked and none named like the screen: not recorded.
      */
-    private @Nullable Entity find(ClientWorld world, Text title) {
+    private @Nullable Entity find(ClientLevel world, Component title) {
         InteractionTracker.Pending only = null;
         int candidates = 0;
         for (InteractionTracker.Pending p : interactions.fresh(Settings.bindTimeoutTicks)) {
             if (!p.isEntity()) continue;
-            Entity entity = world.getEntityById(p.networkId());
-            if (!(entity instanceof MerchantEntity) || entity.isRemoved() || !entity.getUuid().equals(p.uuid())) continue;
+            Entity entity = world.getEntity(p.networkId());
+            if (!(entity instanceof AbstractVillager) || entity.isRemoved() || !entity.getUUID().equals(p.uuid())) continue;
             if (title.getString().equals(entity.getDisplayName().getString())) {
                 interactions.consume(p);
                 return entity;
@@ -121,17 +121,17 @@ public final class TradeBinder {
         }
         if (candidates == 1) {
             interactions.consume(only);
-            return world.getEntityById(only.networkId());
+            return world.getEntity(only.networkId());
         }
         return null;
     }
 
     /** Profession and level as the client sees them; wandering traders have neither. */
     static void readVillager(TradeData trades, Entity entity) {
-        if (entity instanceof VillagerDataContainer container) {
+        if (entity instanceof VillagerDataHolder container) {
             VillagerData data = container.getVillagerData();
-            trades.profession = data.profession().getKey().map(k -> k.getValue().toString()).orElse(null);
-            trades.villagerType = data.type().getKey().map(k -> k.getValue().toString()).orElse(null);
+            trades.profession = data.profession().unwrapKey().map(k -> k.identifier().toString()).orElse(null);
+            trades.villagerType = data.type().unwrapKey().map(k -> k.identifier().toString()).orElse(null);
             trades.level = data.level();
         } else {
             trades.profession = null;
@@ -140,20 +140,20 @@ public final class TradeBinder {
         }
     }
 
-    private void snapshot(Bound bound, List<TradeOffer> offers) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private void snapshot(Bound bound, List<MerchantOffer> offers) {
+        Minecraft client = Minecraft.getInstance();
         MemoryBank bank = banks.bank();
-        if (bank == null || client.world == null) return;
-        RegistryOps<JsonElement> ops = client.world.getRegistryManager().getOps(JsonOps.INSTANCE);
+        if (bank == null || client.level == null) return;
+        RegistryOps<JsonElement> ops = client.level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
         List<TradeData.Offer> out = new ArrayList<>();
-        for (TradeOffer offer : offers) {
-            JsonElement buy1 = encode(ops, offer.getDisplayedFirstBuyItem());
-            JsonElement sell = encode(ops, offer.getSellItem());
+        for (MerchantOffer offer : offers) {
+            JsonElement buy1 = encode(ops, offer.getCostA());
+            JsonElement sell = encode(ops, offer.getResult());
             if (buy1 == null || sell == null) continue;
-            ItemStack second = offer.getDisplayedSecondBuyItem();
-            out.add(new TradeData.Offer(buy1, offer.getOriginalFirstBuyItem().getCount(),
+            ItemStack second = offer.getCostB();
+            out.add(new TradeData.Offer(buy1, offer.getBaseCostA().getCount(),
                     second.isEmpty() ? null : encode(ops, second), sell,
-                    offer.getUses(), offer.getMaxUses(), offer.getMerchantExperience()));
+                    offer.getUses(), offer.getMaxUses(), offer.getXp()));
         }
         TradeData trades = bound.record.trades;
         TradeData.Snapshot s = new TradeData.Snapshot();

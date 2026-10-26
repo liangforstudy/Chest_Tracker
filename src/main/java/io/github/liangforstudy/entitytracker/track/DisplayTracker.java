@@ -10,31 +10,6 @@ import io.github.liangforstudy.entitytracker.data.EntityRecord;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.data.Notes;
 import io.github.liangforstudy.entitytracker.data.RecordStatus;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.ChiseledBookshelfBlock;
-import net.minecraft.block.DecoratedPotBlock;
-import net.minecraft.block.JukeboxBlock;
-import net.minecraft.block.LecternBlock;
-import net.minecraft.block.ShelfBlock;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.block.entity.DecoratedPotBlockEntity;
-import net.minecraft.block.entity.ShelfBlockEntity;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.decoration.ArmorStandEntity;
-import net.minecraft.entity.decoration.ItemFrameEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.tag.ItemTags;
-import net.minecraft.util.Hand;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -44,6 +19,30 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Set;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.ChiseledBookShelfBlock;
+import net.minecraft.world.level.block.DecoratedPotBlock;
+import net.minecraft.world.level.block.JukeboxBlock;
+import net.minecraft.world.level.block.LecternBlock;
+import net.minecraft.world.level.block.ShelfBlock;
+import net.minecraft.world.level.block.entity.DecoratedPotBlockEntity;
+import net.minecraft.world.level.block.entity.ShelfBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
 
 /**
  * Things that hold items without a container screen: shelves, decorated pots, jukeboxes,
@@ -111,7 +110,7 @@ public final class DisplayTracker {
     static @Nullable Kind kind(Block block) {
         if (block instanceof ShelfBlock) return Kind.VISIBLE;
         if (block instanceof DecoratedPotBlock) return Kind.POT;
-        if (block instanceof ChiseledBookshelfBlock) return Kind.BOOKSHELF;
+        if (block instanceof ChiseledBookShelfBlock) return Kind.BOOKSHELF;
         if (block instanceof JukeboxBlock) return Kind.JUKEBOX;
         if (block instanceof LecternBlock) return Kind.LECTERN;
         return null;
@@ -119,7 +118,7 @@ public final class DisplayTracker {
 
     static @Nullable Kind kind(String type) {
         Identifier id = Identifier.tryParse(type);
-        return id == null ? null : kind(Registries.BLOCK.get(id));
+        return id == null ? null : kind(BuiltInRegistries.BLOCK.getValue(id));
     }
 
     /**
@@ -144,18 +143,18 @@ public final class DisplayTracker {
     // ---- Right-clicks -------------------------------------------------------------------------
 
     /** From the interaction mixin, before the click goes to the server. */
-    public void onInteractBlock(ClientPlayerEntity player, Hand hand, BlockHitResult hit) {
+    public void onInteractBlock(LocalPlayer player, InteractionHand hand, BlockHitResult hit) {
         MemoryBank bank = banks.bank();
-        ClientWorld world = MinecraftClient.getInstance().world;
+        ClientLevel world = Minecraft.getInstance().level;
         if (bank == null || world == null) return;
         BlockPos pos = hit.getBlockPos();
         BlockState state = world.getBlockState(pos);
         Kind kind = kind(state.getBlock());
         if (kind == null) return;
         // Sneaking with something in either hand uses the item, not the block.
-        if (player.isSneaking() && (!player.getMainHandStack().isEmpty() || !player.getOffHandStack().isEmpty())) return;
-        ItemStack held = player.getStackInHand(hand);
-        String dimension = world.getRegistryKey().getValue().toString();
+        if (player.isShiftKeyDown() && (!player.getMainHandItem().isEmpty() || !player.getOffhandItem().isEmpty())) return;
+        ItemStack held = player.getItemInHand(hand);
+        String dimension = world.dimension().identifier().toString();
         BlockRecord record = getOrCreate(bank, world, pos, state);
         switch (kind) {
             case VISIBLE -> readVisible(bank, record, world);
@@ -163,20 +162,20 @@ public final class DisplayTracker {
                 readPotChunk(bank, record, world);
                 if (!held.isEmpty() && world.getBlockEntity(pos) instanceof DecoratedPotBlockEntity pot) {
                     potInserts.removeIf(p -> p.pos.equals(pos) && p.dimension.equals(dimension));
-                    potInserts.add(new PotInsert(dimension, pos.toImmutable(), held.copyWithCount(1), pot.lastWobbleTime, clock.currentTick()));
+                    potInserts.add(new PotInsert(dimension, pos.immutable(), held.copyWithCount(1), pot.wobbleStartedAtTick, clock.currentTick()));
                 }
             }
             case JUKEBOX -> {
-                if (!state.get(JukeboxBlock.HAS_RECORD) && held.contains(DataComponentTypes.JUKEBOX_PLAYABLE)) {
+                if (!state.getValue(JukeboxBlock.HAS_RECORD) && held.has(DataComponents.JUKEBOX_PLAYABLE)) {
                     expect(dimension, pos, 0, held);
                 }
             }
             case LECTERN -> {
-                if (!state.get(LecternBlock.HAS_BOOK) && held.isIn(ItemTags.LECTERN_BOOKS)) expect(dimension, pos, 0, held);
+                if (!state.getValue(LecternBlock.HAS_BOOK) && held.is(ItemTags.LECTERN_BOOKS)) expect(dimension, pos, 0, held);
             }
             case BOOKSHELF -> {
-                OptionalInt slot = ((ChiseledBookshelfBlock) state.getBlock()).getHitSlot(hit, state.get(ChiseledBookshelfBlock.FACING));
-                if (slot.isPresent() && !occupied(state, slot.getAsInt()) && held.isIn(ItemTags.BOOKSHELF_BOOKS)) {
+                OptionalInt slot = ((ChiseledBookShelfBlock) state.getBlock()).getHitSlot(hit, state.getValue(ChiseledBookShelfBlock.FACING));
+                if (slot.isPresent() && !occupied(state, slot.getAsInt()) && held.is(ItemTags.BOOKSHELF_BOOKS)) {
                     expect(dimension, pos, slot.getAsInt(), held);
                 }
             }
@@ -186,16 +185,16 @@ public final class DisplayTracker {
 
     private void expect(String dimension, BlockPos pos, int slot, ItemStack held) {
         pending.removeIf(p -> p.pos.equals(pos) && p.slot == slot && p.dimension.equals(dimension));
-        pending.add(new Pending(dimension, pos.toImmutable(), slot, held.copyWithCount(1), clock.currentTick()));
+        pending.add(new Pending(dimension, pos.immutable(), slot, held.copyWithCount(1), clock.currentTick()));
     }
 
     /** From the interaction mixin: item frames and armor stands are remembered once used. */
     public void onInteractEntity(Entity entity) {
-        if (!(entity instanceof ItemFrameEntity) && !(entity instanceof ArmorStandEntity)) return;
+        if (!(entity instanceof ItemFrame) && !(entity instanceof ArmorStand)) return;
         MemoryBank bank = banks.bank();
-        ClientWorld world = MinecraftClient.getInstance().world;
+        ClientLevel world = Minecraft.getInstance().level;
         if (bank == null || world == null) return;
-        EntityRecord record = bank.getOrCreate(entity.getUuid());
+        EntityRecord record = bank.getOrCreate(entity.getUUID());
         positions.update(record, entity, world, true);
         readEntity(bank, record, entity, world);
         bank.markDirty();
@@ -203,9 +202,9 @@ public final class DisplayTracker {
 
     // ---- Keeping them up to date --------------------------------------------------------------
 
-    public void tick(MinecraftClient client) {
+    public void tick(Minecraft client) {
         MemoryBank bank = banks.bank();
-        ClientWorld world = client.world;
+        ClientLevel world = client.level;
         if (bank == null || world == null) {
             pending.clear();
             potInserts.clear();
@@ -216,21 +215,21 @@ public final class DisplayTracker {
         confirmPotInserts(bank, world);
         if (clock.currentTick() % Settings.trackIntervalTicks != 0) return;
 
-        for (Entity entity : world.getEntities()) {
-            if (!(entity instanceof ItemFrameEntity) && !(entity instanceof ArmorStandEntity)) continue;
+        for (Entity entity : world.entitiesForRendering()) {
+            if (!(entity instanceof ItemFrame) && !(entity instanceof ArmorStand)) continue;
             // Just spawned: the item or armour may not have arrived yet; don't read it as empty.
-            if (entity.age < 20) continue;
-            EntityRecord record = bank.get(entity.getUuid());
+            if (entity.tickCount < 20) continue;
+            EntityRecord record = bank.get(entity.getUUID());
             if (record != null && !record.isTrashed()) readEntity(bank, record, entity, world);
         }
 
-        String dimension = world.getRegistryKey().getValue().toString();
+        String dimension = world.dimension().identifier().toString();
         for (BlockRecord record : bank.allBlocks()) {
             if (record.global || record.isTrashed() || !dimension.equals(record.dimension)) continue;
             Kind kind = kind(record.type);
             if (kind == null) continue;
             BlockPos pos = record.pos;
-            if (!world.getChunkManager().isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) continue;
+            if (!world.getChunkSource().hasChunk(pos.getX() >> 4, pos.getZ() >> 4)) continue;
             BlockState state = world.getBlockState(pos);
             if (kind(state.getBlock()) != kind) continue; // gone or replaced
             if (kind == Kind.VISIBLE) readVisible(bank, record, world);
@@ -240,9 +239,9 @@ public final class DisplayTracker {
     }
 
     /** The slot filled up as expected: the item the player held is what went in. */
-    private void confirmPending(MemoryBank bank, ClientWorld world) {
+    private void confirmPending(MemoryBank bank, ClientLevel world) {
         if (pending.isEmpty()) return;
-        String dimension = world.getRegistryKey().getValue().toString();
+        String dimension = world.dimension().identifier().toString();
         for (Iterator<Pending> it = pending.iterator(); it.hasNext(); ) {
             Pending p = it.next();
             if (!p.dimension.equals(dimension) || clock.currentTick() - p.tick > CONFIRM_TICKS) {
@@ -271,17 +270,17 @@ public final class DisplayTracker {
         if (items.removeIf(i -> !filled(state, kind, i.slot()))) setItems(bank, record, items, record.slotCount);
     }
 
-    private void readVisible(MemoryBank bank, BlockRecord record, ClientWorld world) {
+    private void readVisible(MemoryBank bank, BlockRecord record, ClientLevel world) {
         if (!(world.getBlockEntity(record.pos) instanceof ShelfBlockEntity shelf)) return;
         List<ContainerRecord.SlotItem> items = new ArrayList<>();
-        for (int i = 0; i < shelf.size(); i++) add(world, items, i, shelf.getStack(i));
-        setChecked(bank, record, items, shelf.size());
+        for (int i = 0; i < shelf.getContainerSize(); i++) add(world, items, i, shelf.getItem(i));
+        setChecked(bank, record, items, shelf.getContainerSize());
     }
 
     /** A pot's chunk data, when it carries an item the last data didn't: that's what was in it then. */
-    private void readPotChunk(MemoryBank bank, BlockRecord record, ClientWorld world) {
+    private void readPotChunk(MemoryBank bank, BlockRecord record, ClientLevel world) {
         if (!(world.getBlockEntity(record.pos) instanceof DecoratedPotBlockEntity pot)) return;
-        ItemStack stack = pot.getStack();
+        ItemStack stack = pot.getTheItem();
         if (stack.isEmpty()) return; // empty, or a server that doesn't send it: proves nothing
         JsonElement json = encode(world, stack);
         if (json == null || json.equals(potChunkItems.put(record.key(), json))) return;
@@ -293,9 +292,9 @@ public final class DisplayTracker {
      * The pot wobbled since the player offered it an item: one way if the server took one
      * (into an empty pot, or onto the same item), the other if it refused (full, or another item).
      */
-    private void confirmPotInserts(MemoryBank bank, ClientWorld world) {
+    private void confirmPotInserts(MemoryBank bank, ClientLevel world) {
         if (potInserts.isEmpty()) return;
-        String dimension = world.getRegistryKey().getValue().toString();
+        String dimension = world.dimension().identifier().toString();
         for (Iterator<PotInsert> it = potInserts.iterator(); it.hasNext(); ) {
             PotInsert p = it.next();
             if (!p.dimension.equals(dimension) || clock.currentTick() - p.tick > CONFIRM_TICKS) {
@@ -303,40 +302,40 @@ public final class DisplayTracker {
                 continue;
             }
             if (!(world.getBlockEntity(p.pos) instanceof DecoratedPotBlockEntity pot)
-                    || pot.lastWobbleTime == p.wobbleBefore || pot.lastWobbleType == null) continue;
+                    || pot.wobbleStartedAtTick == p.wobbleBefore || pot.lastWobbleStyle == null) continue;
             it.remove();
             BlockRecord record = getOrCreate(bank, world, p.pos, world.getBlockState(p.pos));
             ItemStack known = record.items.isEmpty() ? ItemStack.EMPTY : decode(world, record.items.get(0).stack());
-            if (pot.lastWobbleType == DecoratedPotBlockEntity.WobbleType.POSITIVE) {
-                ItemStack now = ItemStack.areItemsAndComponentsEqual(known, p.stack)
-                        ? known.copyWithCount(Math.min(known.getCount() + 1, known.getMaxCount()))
+            if (pot.lastWobbleStyle == DecoratedPotBlockEntity.WobbleStyle.POSITIVE) {
+                ItemStack now = ItemStack.isSameItemSameComponents(known, p.stack)
+                        ? known.copyWithCount(Math.min(known.getCount() + 1, known.getMaxStackSize()))
                         : p.stack.copyWithCount(1); // it was empty after all, or held this item already
                 JsonElement json = encode(world, now);
                 if (json == null) continue;
                 // Had it refused before, it held unseen items: now we know which, but not how many.
                 if (!known.isEmpty()) record.hints.remove(Notes.UNKNOWN_CONTENTS);
                 setItems(bank, record, List.of(new ContainerRecord.SlotItem(0, json)), 1);
-            } else if (known.isEmpty() || ItemStack.areItemsAndComponentsEqual(known, p.stack)
-                    && known.getCount() < known.getMaxCount()) {
+            } else if (known.isEmpty() || ItemStack.isSameItemSameComponents(known, p.stack)
+                    && known.getCount() < known.getMaxStackSize()) {
                 // Refused, though as far as we knew it had room for this: it holds something unseen.
                 if (record.hints.add(Notes.UNKNOWN_CONTENTS)) bank.markDirty();
             }
         }
     }
 
-    private static ItemStack decode(ClientWorld world, JsonElement json) {
-        var ops = world.getRegistryManager().getOps(JsonOps.INSTANCE);
+    private static ItemStack decode(ClientLevel world, JsonElement json) {
+        var ops = world.registryAccess().createSerializationContext(JsonOps.INSTANCE);
         return ItemStack.CODEC.parse(ops, json).result().orElse(ItemStack.EMPTY);
     }
 
-    private void readEntity(MemoryBank bank, EntityRecord record, Entity entity, ClientWorld world) {
+    private void readEntity(MemoryBank bank, EntityRecord record, Entity entity, ClientLevel world) {
         List<ContainerRecord.SlotItem> items = new ArrayList<>();
         int slots;
-        if (entity instanceof ItemFrameEntity frame) {
-            add(world, items, 0, frame.getHeldItemStack());
+        if (entity instanceof ItemFrame frame) {
+            add(world, items, 0, frame.getItem());
             slots = 1;
-        } else if (entity instanceof ArmorStandEntity stand) {
-            for (int i = 0; i < STAND_SLOTS.length; i++) add(world, items, i, stand.getEquippedStack(STAND_SLOTS[i]));
+        } else if (entity instanceof ArmorStand stand) {
+            for (int i = 0; i < STAND_SLOTS.length; i++) add(world, items, i, stand.getItemBySlot(STAND_SLOTS[i]));
             slots = STAND_SLOTS.length;
         } else {
             return;
@@ -363,27 +362,27 @@ public final class DisplayTracker {
         bank.markDirty();
     }
 
-    private static void add(ClientWorld world, List<ContainerRecord.SlotItem> items, int slot, ItemStack stack) {
+    private static void add(ClientLevel world, List<ContainerRecord.SlotItem> items, int slot, ItemStack stack) {
         if (stack.isEmpty()) return;
         JsonElement json = encode(world, stack);
         if (json != null) items.add(new ContainerRecord.SlotItem(slot, json));
     }
 
-    private static @Nullable JsonElement encode(ClientWorld world, ItemStack stack) {
-        var ops = world.getRegistryManager().getOps(JsonOps.INSTANCE);
+    private static @Nullable JsonElement encode(ClientLevel world, ItemStack stack) {
+        var ops = world.registryAccess().createSerializationContext(JsonOps.INSTANCE);
         return ItemStack.CODEC.encodeStart(ops, stack).result().orElse(null);
     }
 
-    private static BlockRecord getOrCreate(MemoryBank bank, ClientWorld world, BlockPos pos, BlockState state) {
-        String dimension = world.getRegistryKey().getValue().toString();
+    private static BlockRecord getOrCreate(MemoryBank bank, ClientLevel world, BlockPos pos, BlockState state) {
+        String dimension = world.dimension().identifier().toString();
         long now = System.currentTimeMillis();
         BlockRecord record = bank.getBlockAt(dimension, pos);
-        String type = Registries.BLOCK.getId(state.getBlock()).toString();
+        String type = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
         if (record == null || !record.pos.equals(pos)) {
             record = new BlockRecord(false);
             record.firstSeen = now;
             record.dimension = dimension;
-            record.pos = pos.toImmutable();
+            record.pos = pos.immutable();
             record.slotCount = slotCount(kind(state.getBlock()));
         }
         record.type = type;
@@ -398,18 +397,18 @@ public final class DisplayTracker {
 
     /** Shelves and pots get theirs from the block entity on the first read. */
     private static int slotCount(@Nullable Kind kind) {
-        return kind == Kind.BOOKSHELF ? ChiseledBookshelfBlock.SLOT_OCCUPIED_PROPERTIES.size() : 1;
+        return kind == Kind.BOOKSHELF ? ChiseledBookShelfBlock.SLOT_OCCUPIED_PROPERTIES.size() : 1;
     }
 
     private static boolean occupied(BlockState state, int slot) {
-        var slots = ChiseledBookshelfBlock.SLOT_OCCUPIED_PROPERTIES;
-        return slot >= 0 && slot < slots.size() && state.get(slots.get(slot));
+        var slots = ChiseledBookShelfBlock.SLOT_OCCUPIED_PROPERTIES;
+        return slot >= 0 && slot < slots.size() && state.getValue(slots.get(slot));
     }
 
     private static boolean filled(BlockState state, Kind kind, int slot) {
         return switch (kind) {
-            case JUKEBOX -> slot == 0 && state.get(JukeboxBlock.HAS_RECORD);
-            case LECTERN -> slot == 0 && state.get(LecternBlock.HAS_BOOK);
+            case JUKEBOX -> slot == 0 && state.getValue(JukeboxBlock.HAS_RECORD);
+            case LECTERN -> slot == 0 && state.getValue(LecternBlock.HAS_BOOK);
             case BOOKSHELF -> occupied(state, slot);
             case VISIBLE, POT -> true;
         };
@@ -424,7 +423,7 @@ public final class DisplayTracker {
         // A pot's hint comes from a refused insert (confirmPotInserts) and stays until it's known.
         if (kind == Kind.POT && record.hints.contains(Notes.UNKNOWN_CONTENTS)) hints.add(Notes.UNKNOWN_CONTENTS);
         if (kind == null || kind == Kind.VISIBLE || kind == Kind.POT) return;
-        int slots = kind == Kind.BOOKSHELF ? ChiseledBookshelfBlock.SLOT_OCCUPIED_PROPERTIES.size() : 1;
+        int slots = kind == Kind.BOOKSHELF ? ChiseledBookShelfBlock.SLOT_OCCUPIED_PROPERTIES.size() : 1;
         for (int i = 0; i < slots; i++) {
             final int slot = i;
             if (filled(state, kind, slot) && record.items.stream().noneMatch(item -> item.slot() == slot)) {

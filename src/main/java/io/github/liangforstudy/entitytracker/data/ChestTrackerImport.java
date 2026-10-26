@@ -3,15 +3,15 @@ package io.github.liangforstudy.entitytracker.data;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.SharedConstants;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.NbtList;
 import net.minecraft.nbt.NbtOps;
-import net.minecraft.nbt.NbtSizeTracker;
-import net.minecraft.registry.RegistryWrapper;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.nbt.Tag;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -67,20 +67,20 @@ public final class ChestTrackerImport {
      * Reads the file and turns it into block records. Safe off the game thread: the registries
      * are only read. Ender chests come back as global records without an owner.
      */
-    public static Result read(Path file, RegistryWrapper.WrapperLookup registries) throws IOException {
-        NbtCompound root = NbtIo.readCompressed(file, NbtSizeTracker.ofUnlimitedBytes());
-        var nbtOps = registries.getOps(NbtOps.INSTANCE);
-        var jsonOps = registries.getOps(JsonOps.INSTANCE);
+    public static Result read(Path file, HolderLookup.Provider registries) throws IOException {
+        CompoundTag root = NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
+        var nbtOps = registries.createSerializationContext(NbtOps.INSTANCE);
+        var jsonOps = registries.createSerializationContext(JsonOps.INSTANCE);
         List<BlockRecord> records = new ArrayList<>();
         int items = 0, rawItems = 0, skipped = 0, dataVersion = 0;
-        for (String dimension : root.getKeys()) {
-            NbtCompound dim = root.getCompoundOrEmpty(dimension);
-            dataVersion = Math.max(dataVersion, dim.getInt("MinecraftDataVersion", 0));
-            NbtCompound memories = dim.getCompoundOrEmpty("memories");
-            for (String posKey : memories.getKeys()) {
-                NbtCompound memory = memories.getCompoundOrEmpty(posKey);
+        for (String dimension : root.keySet()) {
+            CompoundTag dim = root.getCompoundOrEmpty(dimension);
+            dataVersion = Math.max(dataVersion, dim.getIntOr("MinecraftDataVersion", 0));
+            CompoundTag memories = dim.getCompoundOrEmpty("memories");
+            for (String posKey : memories.keySet()) {
+                CompoundTag memory = memories.getCompoundOrEmpty(posKey);
                 BlockPos pos = parsePos(posKey);
-                String type = memory.getString("container", "");
+                String type = memory.getStringOr("container", "");
                 if (pos == null || type.isEmpty()) {
                     skipped++;
                     continue;
@@ -91,7 +91,7 @@ public final class ChestTrackerImport {
                 r.dimension = ender ? "minecraft:overworld" : dimension;
                 List<BlockPos> all = new ArrayList<>();
                 all.add(pos);
-                for (NbtElement e : memory.getListOrEmpty("otherPositions")) {
+                for (Tag e : memory.getListOrEmpty("otherPositions")) {
                     BlockPos other = e.asString().map(ChestTrackerImport::parsePos).orElse(null);
                     if (other != null) all.add(other);
                 }
@@ -105,16 +105,16 @@ public final class ChestTrackerImport {
                 r.z = r.pos.getZ() + 0.5 + (second == null ? 0 : (second.getZ() - r.pos.getZ()) / 2.0);
                 r.name = memory.getString("name").filter(s -> !s.isBlank()).orElse(null);
                 r.status = RecordStatus.UNLOADED;
-                long when = parseTime(memory.getString("realTimestamp", ""));
+                long when = parseTime(memory.getStringOr("realTimestamp", ""));
                 r.firstSeen = when;
                 r.lastSeen = when;
                 r.lastOpened = when;
 
-                NbtList stacks = memory.getListOrEmpty("items");
+                ListTag stacks = memory.getListOrEmpty("items");
                 int slot = 0;
-                for (NbtElement e : stacks) {
+                for (Tag e : stacks) {
                     // Chest Tracker writes empty slots as {} (seen in ender chests): keep the slot free.
-                    if (e instanceof NbtCompound c && c.isEmpty()) {
+                    if (e instanceof CompoundTag c && c.isEmpty()) {
                         slot++;
                         continue;
                     }
@@ -139,7 +139,7 @@ public final class ChestTrackerImport {
 
     /** True when the file was written by another Minecraft version (items may not read right). */
     public static boolean otherVersion(Result result) {
-        return result.dataVersion() != 0 && result.dataVersion() != SharedConstants.getGameVersion().dataVersion().id();
+        return result.dataVersion() != 0 && result.dataVersion() != SharedConstants.getCurrentVersion().dataVersion().version();
     }
 
     /**

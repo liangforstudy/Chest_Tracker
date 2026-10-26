@@ -5,10 +5,6 @@ import io.github.liangforstudy.entitytracker.Settings;
 import io.github.liangforstudy.entitytracker.data.BankStorage;
 import io.github.liangforstudy.entitytracker.data.BlockRecord;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ServerInfo;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
@@ -16,6 +12,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.network.chat.Component;
 
 /**
  * Opens the bank for the current server once the player exists, saves it after changes, and
@@ -51,13 +51,13 @@ public final class BankManager {
         return storage;
     }
 
-    public void tick(MinecraftClient client) {
-        if (bank == null && loading == null && client.player != null && client.world != null) startLoading(client);
+    public void tick(Minecraft client) {
+        if (bank == null && loading == null && client.player != null && client.level != null) startLoading(client);
         if (loading != null && loading.isDone() && client.player != null) open(client);
         if (bank != null && ++ticks % 1200 == 0) bank.markPlayedToday(); // also catches playing past midnight
         if (bank != null && bank.tickDebounce(Settings.saveDebounceTicks)) saveInBackground();
         if (pendingWarning != null && client.player != null) {
-            client.player.sendMessage(Text.literal(pendingWarning).formatted(Formatting.RED), false);
+            client.player.displayClientMessage(Component.literal(pendingWarning).withStyle(ChatFormatting.RED), false);
             pendingWarning = null;
         }
     }
@@ -67,13 +67,13 @@ public final class BankManager {
         return loading != null;
     }
 
-    private void startLoading(MinecraftClient client) {
+    private void startLoading(Minecraft client) {
         loadingAddress = serverName(client);
         String server = storage.resolveServer(loadingAddress);
         loading = io.submit(() -> storage.load(server));
     }
 
-    private void open(MinecraftClient client) {
+    private void open(Minecraft client) {
         String address = loadingAddress;
         BankStorage.LoadResult result;
         try {
@@ -85,7 +85,7 @@ public final class BankManager {
         }
         loading = null;
         bank = result.bank();
-        UUID me = client.player.getUuid();
+        UUID me = client.player.getUUID();
         String myName = client.player.getName().getString();
         bank.currentPlayer = me;
         bank.markPlayedToday();
@@ -104,12 +104,12 @@ public final class BankManager {
                 bank.key, address, result.reason(), storage.bankFile(bank.key), bank.size());
     }
 
-    private static String serverName(MinecraftClient client) {
-        if (client.isIntegratedServerRunning() && client.getServer() != null) {
-            return "singleplayer_" + client.getServer().getSaveProperties().getLevelName();
+    private static String serverName(Minecraft client) {
+        if (client.hasSingleplayerServer() && client.getSingleplayerServer() != null) {
+            return "singleplayer_" + client.getSingleplayerServer().getWorldData().getLevelName();
         }
-        ServerInfo info = client.getCurrentServerEntry();
-        if (info != null) return info.address;
+        ServerData info = client.getCurrentServer();
+        if (info != null) return info.ip;
         return "unknown_server";
     }
 
@@ -121,7 +121,7 @@ public final class BankManager {
         int size = b.size();
         lastWrite = io.submit(() -> {
             // A failed write marks the bank dirty again so the next save retries.
-            if (!storage.write(b.key, root, size)) MinecraftClient.getInstance().execute(b::markDirty);
+            if (!storage.write(b.key, root, size)) Minecraft.getInstance().execute(b::markDirty);
         });
     }
 

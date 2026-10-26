@@ -11,29 +11,29 @@ import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.data.RecordStatus;
 import io.github.liangforstudy.entitytracker.mixin.client.MountScreenHandlerAccessor;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.ChestBlock;
-import net.minecraft.block.EnderChestBlock;
-import net.minecraft.block.LecternBlock;
-import net.minecraft.block.enums.ChestType;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.ScreenHandlerProvider;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.passive.AbstractDonkeyEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.screen.MerchantScreenHandler;
-import net.minecraft.screen.MountScreenHandler;
-import net.minecraft.screen.PlayerScreenHandler;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.text.Text;
-import net.minecraft.text.TranslatableTextContent;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.MenuAccess;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.animal.equine.AbstractChestedHorse;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.AbstractMountInventoryMenu;
+import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.MerchantMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.EnderChestBlock;
+import net.minecraft.world.level.block.LecternBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.ChestType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -61,13 +61,13 @@ public final class ScreenBinder {
 
     /** The open screen and the record it fills. {@code networkId} is -1 for blocks. */
     private static final class Bound {
-        final ScreenHandler handler;
+        final AbstractContainerMenu handler;
         final ContainerRecord record;
         final int networkId;
         /** Set once the server has sent the full contents; before that the slots are just empty. */
         boolean synced;
 
-        Bound(ScreenHandler handler, ContainerRecord record, int networkId) {
+        Bound(AbstractContainerMenu handler, ContainerRecord record, int networkId) {
             this.handler = handler;
             this.record = record;
             this.networkId = networkId;
@@ -78,15 +78,15 @@ public final class ScreenBinder {
 
     public void register() {
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
-            // Lectern screens aren't HandledScreens, but have a handler with the book in it.
-            if (!(screen instanceof ScreenHandlerProvider<?> handled) || seen.containsKey(screen)) return;
+            // Lectern screens aren't AbstractContainerScreens, but have a menu with the book in it.
+            if (!(screen instanceof MenuAccess<?> handled) || seen.containsKey(screen)) return;
             seen.put(screen, Boolean.TRUE);
             MemoryBank bank = banks.bank();
-            ClientWorld world = client.world;
+            ClientLevel world = client.level;
             if (bank == null || world == null) return;
-            ScreenHandler handler = handled.getScreenHandler();
+            AbstractContainerMenu handler = handled.getMenu();
             Bound bound = bind(client, world, bank, handler, screen.getTitle());
-            EntityTrackerClient.LOGGER.debug("Container screen {} ({}) opened, bound to {}", handler.syncId,
+            EntityTrackerClient.LOGGER.debug("Container screen {} ({}) opened, bound to {}", handler.containerId,
                     screen.getClass().getSimpleName(), bound == null ? null : bound.record.key());
             if (bound == null) return;
             bank.markDirty();
@@ -111,22 +111,22 @@ public final class ScreenBinder {
      */
     public void onInventorySync(int syncId) {
         Bound bound = current;
-        if (bound == null || bound.handler.syncId != syncId) return;
+        if (bound == null || bound.handler.containerId != syncId) return;
         bound.synced = true;
-        snapshot(MinecraftClient.getInstance(), bound);
+        snapshot(Minecraft.getInstance(), bound);
     }
 
-    private @Nullable Bound bind(MinecraftClient client, ClientWorld world, MemoryBank bank, ScreenHandler handler, Text title) {
+    private @Nullable Bound bind(Minecraft client, ClientLevel world, MemoryBank bank, AbstractContainerMenu handler, Component title) {
         // The player's own inventory has 5 crafting slots, the same as a hopper minecart.
-        if (handler instanceof PlayerScreenHandler) return null;
+        if (handler instanceof InventoryMenu) return null;
         // Merchant screens have 3 slots, like a furnace clicked just before; TradeBinder handles them.
-        if (handler instanceof MerchantScreenHandler) return null;
+        if (handler instanceof MerchantMenu) return null;
 
         // Horses, donkeys, mules, llamas: the handler holds the entity itself.
-        if (handler instanceof MountScreenHandler) {
+        if (handler instanceof AbstractMountInventoryMenu) {
             Entity mount = ((MountScreenHandlerAccessor) handler).entitytracker$getMount();
-            if (!(mount instanceof AbstractDonkeyEntity donkey && donkey.hasChest())) return null;
-            interactions.consumeEntity(mount.getUuid());
+            if (!(mount instanceof AbstractChestedHorse donkey && donkey.hasChest())) return null;
+            interactions.consumeEntity(mount.getUUID());
             return bindEntity(world, bank, handler, mount);
         }
 
@@ -138,8 +138,8 @@ public final class ScreenBinder {
         int slotMatches = 0;
         for (InteractionTracker.Pending p : fresh) {
             if (p.isEntity()) {
-                Entity entity = world.getEntityById(p.networkId());
-                if (!matches(entity, containerSlots) || !entity.getUuid().equals(p.uuid())) continue;
+                Entity entity = world.getEntity(p.networkId());
+                if (!matches(entity, containerSlots) || !entity.getUUID().equals(p.uuid())) continue;
                 slotMatches++;
                 onlySlotMatch = p;
                 if (title.getString().equals(entity.getDisplayName().getString())) {
@@ -157,7 +157,7 @@ public final class ScreenBinder {
         // No title matched (a server or ViaVersion may show a different title): only safe when a
         // single clicked entity fits the screen at all.
         if (slotMatches == 1) {
-            Entity entity = world.getEntityById(onlySlotMatch.networkId());
+            Entity entity = world.getEntity(onlySlotMatch.networkId());
             EntityTrackerClient.LOGGER.info("Screen title \"{}\" didn't match {}; bound it as the only candidate",
                     title.getString(), entity.getDisplayName().getString());
             interactions.consume(onlySlotMatch);
@@ -170,17 +170,17 @@ public final class ScreenBinder {
         return null;
     }
 
-    private Bound bindEntity(ClientWorld world, MemoryBank bank, ScreenHandler handler, Entity entity) {
-        EntityRecord record = bank.getOrCreate(entity.getUuid());
+    private Bound bindEntity(ClientLevel world, MemoryBank bank, AbstractContainerMenu handler, Entity entity) {
+        EntityRecord record = bank.getOrCreate(entity.getUUID());
         // Record type, name and position now, while the entity is certainly loaded.
         positions.update(record, entity, world, true);
         return new Bound(handler, record, entity.getId());
     }
 
-    private @Nullable Bound bindBlock(ClientWorld world, MemoryBank bank, ScreenHandler handler, BlockPos pos,
-                                      int containerSlots, Text title) {
+    private @Nullable Bound bindBlock(ClientLevel world, MemoryBank bank, AbstractContainerMenu handler, BlockPos pos,
+                                      int containerSlots, Component title) {
         BlockState state = world.getBlockState(pos);
-        String dimension = world.getRegistryKey().getValue().toString();
+        String dimension = world.dimension().identifier().toString();
         long now = System.currentTimeMillis();
 
         if (state.getBlock() instanceof EnderChestBlock) {
@@ -201,13 +201,13 @@ public final class ScreenBinder {
         if (DisplayTracker.hasNoScreen(state.getBlock())) return null;
         BlockPos other = null;
         int expected;
-        if (state.getBlock() instanceof ChestBlock && state.get(ChestBlock.CHEST_TYPE) != ChestType.SINGLE) {
-            other = pos.offset(ChestBlock.getFacing(state));
+        if (state.getBlock() instanceof ChestBlock && state.getValue(ChestBlock.TYPE) != ChestType.SINGLE) {
+            other = pos.relative(ChestBlock.getConnectedDirection(state));
             expected = 54;
         } else if (state.getBlock() instanceof LecternBlock) {
             expected = 1; // the book
-        } else if (world.getBlockEntity(pos) instanceof Inventory inventory) {
-            expected = inventory.size();
+        } else if (world.getBlockEntity(pos) instanceof Container inventory) {
+            expected = inventory.getContainerSize();
         } else {
             return null;
         }
@@ -238,41 +238,41 @@ public final class ScreenBinder {
     }
 
     private static void fill(BlockRecord record, BlockState state, String dimension, BlockPos pos, @Nullable BlockPos second,
-                             Text title, long now) {
-        record.type = Registries.BLOCK.getId(state.getBlock()).toString();
+                             Component title, long now) {
+        record.type = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
         record.dimension = dimension;
         record.pos = pos;
         record.x = pos.getX() + 0.5 + (second == null ? 0 : (second.getX() - pos.getX()) / 2.0);
         record.y = pos.getY() + 0.5;
         record.z = pos.getZ() + 0.5 + (second == null ? 0 : (second.getZ() - pos.getZ()) / 2.0);
         // Default titles ("Chest", "Large Chest") are translatable; a renamed container's title is not.
-        record.name = title.getContent() instanceof TranslatableTextContent ? null : title.getString();
+        record.name = title.getContents() instanceof TranslatableContents ? null : title.getString();
         record.status = RecordStatus.LOADED;
         record.lastSeen = now;
     }
 
     private static boolean matches(@Nullable Entity entity, int containerSlots) {
-        return entity instanceof Inventory inventory && !entity.isRemoved() && inventory.size() == containerSlots;
+        return entity instanceof Container inventory && !entity.isRemoved() && inventory.getContainerSize() == containerSlots;
     }
 
-    private static int containerSlotCount(ScreenHandler handler) {
+    private static int containerSlotCount(AbstractContainerMenu handler) {
         int count = 0;
-        for (Slot slot : handler.slots) if (!(slot.inventory instanceof PlayerInventory)) count++;
+        for (Slot slot : handler.slots) if (!(slot.container instanceof Inventory)) count++;
         return count;
     }
 
-    private void snapshot(MinecraftClient client, Bound bound) {
+    private void snapshot(Minecraft client, Bound bound) {
         MemoryBank bank = banks.bank();
-        ClientWorld world = client.world;
+        ClientLevel world = client.level;
         if (bank == null || world == null) return;
-        var ops = world.getRegistryManager().getOps(JsonOps.INSTANCE);
+        var ops = world.registryAccess().createSerializationContext(JsonOps.INSTANCE);
 
         List<ContainerRecord.SlotItem> items = new ArrayList<>();
         int containerSlots = 0;
         for (Slot slot : bound.handler.slots) {
-            if (slot.inventory instanceof PlayerInventory) continue;
+            if (slot.container instanceof Inventory) continue;
             int index = containerSlots++;
-            ItemStack stack = slot.getStack();
+            ItemStack stack = slot.getItem();
             if (stack.isEmpty()) continue;
             var encoded = ItemStack.CODEC.encodeStart(ops, stack);
             JsonElement json = encoded.result().orElse(null);
@@ -286,8 +286,8 @@ public final class ScreenBinder {
 
         ContainerRecord record = bound.record;
         if (record instanceof EntityRecord entityRecord) {
-            Entity entity = world.getEntityById(bound.networkId);
-            if (entity != null && entity.getUuid().equals(entityRecord.uuid)) positions.update(entityRecord, entity, world);
+            Entity entity = world.getEntity(bound.networkId);
+            if (entity != null && entity.getUUID().equals(entityRecord.uuid)) positions.update(entityRecord, entity, world);
         }
         record.items = items;
         record.slotCount = containerSlots;
