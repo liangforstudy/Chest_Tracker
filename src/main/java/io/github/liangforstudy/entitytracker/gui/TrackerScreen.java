@@ -99,6 +99,7 @@ public final class TrackerScreen extends Screen {
         destroyedButton = addRenderableWidget(Button.builder(destroyedLabel(), b -> {
             showDestroyed = !showDestroyed;
             b.setMessage(destroyedLabel());
+            updateBar();
             refresh();
         }).build());
         selectButton = addRenderableWidget(Button.builder(Component.translatable("screen.entitytracker.select"), b -> {
@@ -165,13 +166,10 @@ public final class TrackerScreen extends Screen {
             shown.add(selectButton);
             shown.add(doneButton);
         }
-        int w = Math.min(120, (width - 40) / shown.size());
-        int x = width / 2 - (w * shown.size() + 4 * (shown.size() - 1)) / 2;
-        for (Button b : shown) {
-            b.visible = true;
-            b.setRectangle(w, 20, x, height - 26);
-            x += w + 4;
-        }
+        for (Button b : shown) b.visible = true;
+        // The list ends above the buttons, which take two rows on a narrow screen
+        int top = ButtonBar.layout(shown, font, width, height, 120);
+        list.updateSizeAndPosition(width, top - 4 - LIST_Y, LIST_Y);
     }
 
     private void clearSelection() {
@@ -343,7 +341,10 @@ public final class TrackerScreen extends Screen {
      * and typing never waits for a big base to be searched to the end.
      */
     private void refresh() {
-        if (viewButton != null) viewButton.setMessage(trashLabel());
+        if (viewButton != null) {
+            viewButton.setMessage(trashLabel());
+            updateBar(); // "Trash (n)" grows with n
+        }
         String query = search.getValue().trim().toLowerCase(Locale.ROOT);
         if (query.startsWith("@")) query = query.substring(1); // @head:Notch until full filters (4.6)
         fuzzy = false;

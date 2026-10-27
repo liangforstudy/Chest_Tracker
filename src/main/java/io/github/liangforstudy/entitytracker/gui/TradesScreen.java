@@ -46,6 +46,7 @@ public final class TradesScreen extends Screen {
     private static boolean showWandering = true;
     /** The open row menu (right-click or the row's "⋮"), empty when closed. */
     private final List<Button> menu = new ArrayList<>();
+    private List<Button> bar = List.of();
     private int menuX, menuY, menuW, menuH;
 
     private final String initialQuery;
@@ -58,6 +59,12 @@ public final class TradesScreen extends Screen {
     public TradesScreen(String query) {
         super(Component.translatable("screen.entitytracker.trades.title"));
         this.initialQuery = query;
+    }
+
+    /** The bottom buttons, and the list ending above them (they take two rows on a narrow screen). */
+    private void layoutBar() {
+        int top = ButtonBar.layout(bar, font, width, height, 120);
+        list.updateSizeAndPosition(width, top - 4 - TrackerScreen.LIST_Y, TrackerScreen.LIST_Y);
     }
 
     @Override
@@ -75,24 +82,21 @@ public final class TradesScreen extends Screen {
         addRenderableWidget(list);
         for (Button tab : ScreenTabs.create(minecraft, width, true)) addRenderableWidget(tab);
 
-        List<Button.Builder> bar = List.of(
+        bar = List.of(
                 Button.builder(trashLabel(), b -> {
                     trashView = !trashView;
                     rebuildWidgets();
-                }),
+                }).build(),
                 Button.builder(wanderingLabel(), b -> {
                     showWandering = !showWandering;
                     b.setMessage(wanderingLabel());
+                    layoutBar();
                     refresh();
-                }),
-                Button.builder(CommonComponents.GUI_DONE, b -> onClose()));
+                }).build(),
+                Button.builder(CommonComponents.GUI_DONE, b -> onClose()).build());
         menu.clear();
-        int w = Math.min(120, (width - 40) / bar.size());
-        int x = width / 2 - (w * bar.size() + 4 * (bar.size() - 1)) / 2;
-        for (Button.Builder b : bar) {
-            addRenderableWidget(b.bounds(x, height - 26, w, 20).build());
-            x += w + 4;
-        }
+        for (Button b : bar) addRenderableWidget(b);
+        layoutBar();
         setInitialFocus(search);
         refresh();
     }

@@ -56,27 +56,25 @@ public final class TradeDetailScreen extends Screen {
         String explain = TrackerScreen.explain("trades.changes");
         if (explain != null) line(explain, 0xFFB0B0B0);
 
+        List<Button> buttons = List.of(
+                Button.builder(Component.translatable("screen.entitytracker.detail.back"), b -> onClose()).build(),
+                Button.builder(Component.translatable("screen.entitytracker.detail.copy_xyz"),
+                        b -> TrackerScreen.copyCoords(minecraft, record, true)).build(),
+                Button.builder(Component.translatable("screen.entitytracker.detail.copy_xz"),
+                        b -> TrackerScreen.copyCoords(minecraft, record, false))
+                        .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("screen.entitytracker.detail.copy_xz_tip")))
+                        .build(),
+                Button.builder(record.isTrashed()
+                        ? Component.translatable("screen.entitytracker.restore") : TrackerScreen.markLabel(record), b -> toggleTrash())
+                        .build(),
+                Button.builder(CommonComponents.GUI_DONE, b -> minecraft.setScreen(null)).build());
+        int buttonsTop = ButtonBar.layout(buttons, font, width, height, 100);
+
         int listY = 22 + header.size() * 11 + 6;
-        OfferList list = new OfferList(minecraft, width, height - listY - 32, listY);
+        OfferList list = new OfferList(minecraft, width, buttonsTop - 6 - listY, listY);
         for (TradeView.ShownOffer o : TradeView.offers(record, s)) list.add(o);
         addRenderableWidget(list);
-
-        int w = Math.min(100, (width - 40) / 5);
-        int x = width / 2 - (w * 5 + 16) / 2;
-        int y = height - 26;
-        addRenderableWidget(Button.builder(Component.translatable("screen.entitytracker.detail.back"), b -> onClose())
-                .bounds(x, y, w, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("screen.entitytracker.detail.copy_xyz"),
-                b -> TrackerScreen.copyCoords(minecraft, record, true)).bounds(x + w + 4, y, w, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("screen.entitytracker.detail.copy_xz"),
-                b -> TrackerScreen.copyCoords(minecraft, record, false))
-                .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("screen.entitytracker.detail.copy_xz_tip")))
-                .bounds(x + (w + 4) * 2, y, w, 20).build());
-        addRenderableWidget(Button.builder(record.isTrashed()
-                ? Component.translatable("screen.entitytracker.restore") : TrackerScreen.markLabel(record), b -> toggleTrash())
-                .bounds(x + (w + 4) * 3, y, w, 20).build());
-        addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, b -> minecraft.setScreen(null))
-                .bounds(x + (w + 4) * 4, y, w, 20).build());
+        for (Button b : buttons) addRenderableWidget(b);
     }
 
     /** Header text, wrapped to the screen width. */
