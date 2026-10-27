@@ -35,7 +35,8 @@ No behaviour change; isolates the rename from the real 26.2 differences.
   an iron helmet returned `Pass` and nothing was equipped, most likely because of where the
   bridge aims. The mod's hook still fired, and a stand equipped by command was recorded with the
   right slots. In a normal client: hold armor and a tool, right-click the stand to put each on,
-  then check the tracker shows them in the right slots. Repeat on 26.2.
+  then check the tracker shows them in the right slots. On 26.2 the same click through MCPFabric
+  did equip the helmet and the tracker recorded it, so only 1.21.11 still needs this by hand.
 
 ## Step 2: add the 26.2 node (done)
 
@@ -58,37 +59,42 @@ No behaviour change; isolates the rename from the real 26.2 differences.
   makes Gradle use an installed JDK 25 or download one. Compiling 1.21.11 still targets Java 21
   through toolchains (checked: class files are version 65).
 - Checked: both versions configure, all 26.2 dependencies resolve, and the 1.21.11 jar builds as
-  before. `:26.2:compileJava` fails as expected (step 3); `./gradlew build` builds both versions,
-  so it fails until step 3 is done. Use `./gradlew :1.21.11:build` until then.
+  before.
 - Version differences go in `//? if >=26.2` blocks.
 
-## Step 3: code changes for 26.2
+## Step 3: code changes for 26.2 (done)
 
-The first `:26.2:compileJava` stopped at javac's 100-error limit, so there are more than that.
-Most are the screen-rendering and `setScreen` rows below; the busiest files are `TrackerScreen`,
-`DebugCommand`, `TradesScreen`, `TradeDetailScreen`, `DetailScreen` and `OpenTriggers`.
+`./gradlew build` builds both jars: 1.21.11 (Java 21, `JAVA_21` mixins, `~1.21.11`) and 26.2
+(Java 25, `JAVA_25` mixins, `~26.2`). There were 137 compile errors, nearly all renames, so most
+of the port is a list of Stonecutter replacements in `build.gradle.kts` instead of a `//?` block
+at every call site. Each pattern is scoped (to the `context` graphics variable, a receiver or a
+whole word) so it can't hit unrelated code, and the 26.2 side never appears in the 1.21.11
+sources, so the 1.21.11 build is untouched.
 
-| Area | 1.21.11 (Mojang names) | 26.2 | Where |
+| Area | 1.21.11 (Mojang names) | 26.2 | How it's handled |
 |---|---|---|---|
-| Entity interaction | `interact(Player, Entity, Hand)` **and** `interactAt(...)` | **Merged** into one `interact(Player, Entity, EntityHitResult, Hand)` | `ClientPlayerInteractionManagerMixin`: two injections become one, or `defaultRequire: 1` crashes at startup |
-| Screen rendering | `render(GuiGraphics, ...)` | `extractRenderState(GuiGraphicsExtractor, ...)`; methods renamed: `item()`, `text()`, `blitSprite()`, `setTooltipForNextFrame()` | All of `gui/*` (about 25 call sites) |
-| Current screen | `minecraft.setScreen()`, `minecraft.screen` | `minecraft.gui.setScreen()`, `minecraft.gui.screen()` | About 20 call sites, `OpenTriggers` |
-| Selection lists | `Entry.renderContent(GuiGraphics, ...)` | `Entry.extractContent(GuiGraphicsExtractor, int, int, boolean, float)` | The `Entry` classes in `TrackerScreen`, `TradesScreen`, `TradeDetailScreen`, `AreaConfirmScreen` |
-| Item stacks | Many methods return `ItemStack` | Some now return the immutable `ItemStackTemplate` (about 10 places) | Mostly `ItemIndex`, `TrackerScreen` |
-| Fabric API | `KeyBindingHelper` (`client.keybinding.v1`), `ClientCommandManager.literal/argument` | Renamed to official names; packages moved | `OpenTriggers`, `DebugCommand` |
-| Chat messages | `player.displayClientMessage(Component, boolean)` | Gone from `LocalPlayer`; find the 26.2 replacement | `AreaConfirmScreen`, `TrackerScreen` |
-| Item names | `Item.getName(ItemStack)` | Signature changed | `ItemIndex` |
-| Book reader | `BookViewScreen.BookAccess.fromItem` | Unchanged | `DetailScreen.Reader` |
-| Packets | `handleContainerContent`, `handleMerchantOffers` | Unchanged | `ClientPlayNetworkHandlerMixin` |
-| Riding inventory | `LocalPlayer.sendOpenInventory` | Unchanged | `ClientPlayerEntityMixin` |
-| Mount menu | `AbstractMountInventoryMenu.mount` | Unchanged | `MountScreenHandlerAccessor` |
-| Villagers | `VillagerData.profession()` (a `Holder`) | Package moved to `entity.npc.villager` | `TradeBinder`, `TradeView` |
-| Trades | `MerchantOffer` getters | Unchanged on the client (trades are data-driven server-side since 26.1) | `TradeData` |
-| Fabric API | Yarn-style names | Renamed to official names (see the Fabric Docs migration map) | `OpenTriggers`, `ScreenBinder`, `TradeBinder`, `EntityTrackerClient` |
-| Others | `NbtIo.readCompressed(Path, NbtAccounter)`, `DimensionType.coordinateScale()`, `KeyMapping.Category`, `ItemStack.CODEC` | Unchanged (only some entity packages moved, e.g. `AbstractChestedHorse`, `WanderingTrader`) | |
+| Screen rendering | `render`, `renderBackground`, `Entry.renderContent` with `GuiGraphics`; `drawString`, `drawCenteredString`, `renderItem`, `renderItemDecorations` | `extractRenderState`, `extractBackground`, `Entry.extractContent` with `GuiGraphicsExtractor`; `text`, `centeredText`, `item`, `itemDecorations` | Replacements |
+| Current screen | `minecraft.setScreen()`, `client.screen` | `minecraft.gui.setScreen()`, `client.gui.screen()` | Replacements |
+| Fabric API | `KeyBindingHelper.registerKeyBinding`, `ClientCommandManager`, `Screens.getButtons` | `KeyMappingHelper.registerKeyMapping`, `ClientCommands`, `Screens.getWidgets` | Replacements |
+| Shulker contents | `ItemContainerContents.nonEmptyStream()` | `nonEmptyItemCopyStream()` (`nonEmptyItems()` now gives `ItemStackTemplate`s) | Replacement; loops use streams |
+| Bundle contents | `BundleContents.items()` | `items()` gives `ItemStackTemplate`s | `itemCopyStream()`, which both versions have |
+| Item names | `Item.getName()` | Only `getName(ItemStack)` | `getName(stack)` on both |
+| Chunk position | `ChunkPos.x` / `.z` fields | `x()` / `z()` accessors | `SectionPos.blockToSectionCoord` on both |
+| Chat messages | `player.displayClientMessage(c, overlay)` | `sendSystemMessage(c)` / `sendOverlayMessage(c)` | `gui.Messages` helper, one `//?` switch each |
+| Entity interaction | `interact(Player, Entity, Hand)` and `interactAt(..., EntityHitResult, Hand)` | Merged into one `interact(Player, Entity, EntityHitResult, Hand)` | `//?` switch in `ClientPlayerInteractionManagerMixin` (a wrong target crashes at startup) |
+| Unchanged | Packet handlers, `LocalPlayer.sendOpenInventory`, `AbstractMountInventoryMenu.mount`, `BookViewScreen.BookAccess`, `MerchantOffer`, `NbtIo`, `DimensionType.coordinateScale()`, `KeyMapping.Category`, `ItemStack.CODEC` | | |
 
-Also watch for `ItemStack`s created before a world is loaded (static fields): not allowed since
-26.1, make them lazy or use `ItemStackTemplate`.
+Played on 26.2 in the dev client through MCPFabric, on a copy of the 1.21.11 test world:
+- No mixin errors at startup or on joining the world.
+- The 1.21.11 bank loaded (the bank is chosen by world name, so the copy used the same one):
+  the tracker, chest detail view and trade detail rendered its items, enchantments included.
+- Chest (with a named shulker box holding netherite added, found by searching "netherite"),
+  donkey (sneak-open), villager trades, a new glow item frame, an armor stand (helmet put on by
+  right-click, chestplate and shield by command) and a chest boat opened with the inventory key
+  while riding were all recorded with the right slots, and saved in the 26.2 item format.
+- `LocalPlayer.sendSystemMessage` / `sendOverlayMessage` go through the same chat listener calls
+  as 1.21.11's `displayClientMessage`, so messages behave the same.
+- Loading a 1.21.11 world in 26.2 shows "Create a backup before upgrading this world?" first.
 
 ## Step 4: save format
 
@@ -102,6 +108,10 @@ changed between 1.21.11 and 26.2, so old items may fail to parse and show as emp
   back up and warn when it sees a newer `dataVersion`.
 - `/etracker import`: run imported stacks through the same upgrade (`ChestTrackerImport`
   already reads the data version).
+- Found while testing step 3: simple items (diamonds, an enchanted book, a named sword) from a
+  1.21.11 bank already read fine on 26.2. Both dev clients share `../RnD/run`, so 26.2 rewrites
+  the same bank files in its own format; the mod's daily backup kept the 1.21.11 copy
+  (`entity-tracker/backups/`). Test the way back by opening such a bank in 1.21.11 again.
 
 ## In-game test plan (26.2; singleplayer and a Paper/Fabric server)
 
@@ -162,7 +172,7 @@ changed between 1.21.11 and 26.2, so old items may fail to parse and show as emp
 
 1. Mojang names on 1.21.11 (done)
 2. Gradle setup for 26.2 (done)
-3. Code changes until it compiles
+3. Code changes until it compiles (done)
 4. Save-format data version and upgrade
 5. Run the test plan, update README and ROADMAP
 

@@ -132,9 +132,8 @@ Gradle runs on JDK 25 and downloads one if none is installed.
 ./gradlew build
 ```
 
-The jar ends up in `versions/1.21.11/build/libs/`. A 26.2 build is in progress (see
-[PORTING-26.2.md](PORTING-26.2.md)); until it compiles, build 1.21.11 alone with
-`./gradlew :1.21.11:build`. The project uses
+The jars end up in `versions/<minecraft version>/build/libs/` (1.21.11 and, in progress, 26.2; see
+[PORTING-26.2.md](PORTING-26.2.md)). The project uses
 [Stonecutter](https://stonecutter.kikugie.dev/) and Mojang's official mappings.
 
 ## Credits
