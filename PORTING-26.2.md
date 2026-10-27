@@ -25,8 +25,17 @@ No behaviour change; isolates the rename from the real 26.2 differences.
   `interactEntityAtLocation` → `interactAt`, `interactBlock` → `useItemOn`.
 - Fabric API class names (`ScreenEvents`, `Screens`, `KeyBindingHelper`, ...) stay as they are
   on 1.21.11; Fabric API only renames them from 26.1 on, so that belongs to step 2.
-- Play-test on 1.21.11 (the in-game list below, minus the 26.2-only items). Any difference is a
-  rename mistake.
+- Play-tested on 1.21.11 in a dev client driven through MCPFabric: chest, donkey (mount and
+  sneak-open), villager trades, item frame, armor stand, chest boat via the inventory key while
+  riding, and the tracker and Trades screens all recorded and rendered correctly.
+
+### Still to check by hand
+
+- **Equipping an armor stand by right-click.** Clicking a stand through MCPFabric while holding
+  an iron helmet returned `Pass` and nothing was equipped, most likely because of where the
+  bridge aims. The mod's hook still fired, and a stand equipped by command was recorded with the
+  right slots. In a normal client: hold armor and a tool, right-click the stand to put each on,
+  then check the tracker shows them in the right slots. Repeat on 26.2.
 
 ## Step 2: add the 26.2 node
 
