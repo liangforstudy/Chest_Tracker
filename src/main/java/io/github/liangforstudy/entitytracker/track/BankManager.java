@@ -5,6 +5,7 @@ import io.github.liangforstudy.entitytracker.Settings;
 import io.github.liangforstudy.entitytracker.data.BankStorage;
 import io.github.liangforstudy.entitytracker.data.BlockRecord;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
+import io.github.liangforstudy.entitytracker.gui.Messages;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
@@ -57,7 +58,7 @@ public final class BankManager {
         if (bank != null && ++ticks % 1200 == 0) bank.markPlayedToday(); // also catches playing past midnight
         if (bank != null && bank.tickDebounce(Settings.saveDebounceTicks)) saveInBackground();
         if (pendingWarning != null && client.player != null) {
-            client.player.displayClientMessage(Component.literal(pendingWarning).withStyle(ChatFormatting.RED), false);
+            Messages.chat(Component.literal(pendingWarning).withStyle(ChatFormatting.RED));
             pendingWarning = null;
         }
     }

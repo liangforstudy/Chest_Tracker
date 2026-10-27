@@ -11,6 +11,37 @@ base.archivesName = property("mod.id") as String
 // 26.x needs Java 25; older versions stay on 21
 val requiredJava: JavaVersion = if (loomx.isUnobfuscated) JavaVersion.VERSION_25 else JavaVersion.VERSION_21
 
+// Renames between 1.21.11 (how the sources are written) and 26.2, applied by Stonecutter to the
+// 26.2 build so the many call sites don't each need a //? block. Each pattern is scoped (to the
+// `context` graphics variable, a receiver, a whole word) so it can't hit unrelated code, and the
+// 26.2 side must never appear in the 1.21.11 sources, so the way back is exact too.
+val mc26 = sc.eval(sc.current.version, ">=26.2")
+sc.replacements {
+    fun rename(old: String, new: String) = regex(mc26) { replace(Regex.escape(old), new, Regex.escape(new), old) }
+    fun word(old: String, new: String) = regex(mc26) { replace("\\b$old\\b", new, "\\b$new\\b", old) }
+
+    // Screens render through an extractor now
+    word("GuiGraphics", "GuiGraphicsExtractor")
+    rename("void render(", "void extractRenderState(")
+    rename("super.render(context", "super.extractRenderState(context")
+    word("renderBackground", "extractBackground")
+    word("renderContent", "extractContent")
+    rename("context.drawString(", "context.text(")
+    rename("context.drawCenteredString(", "context.centeredText(")
+    rename("context.renderItem(", "context.item(")
+    rename("context.renderItemDecorations(", "context.itemDecorations(")
+    // The current screen moved from Minecraft to Minecraft.gui
+    regex(mc26) { replace("\\b(minecraft|client)\\.setScreen\\(", "\$1.gui.setScreen(", "\\b(minecraft|client)\\.gui\\.setScreen\\(", "\$1.setScreen(") }
+    rename("client.screen == null", "client.gui.screen() == null")
+    // Shulker box contents as a stream of copies
+    rename(".nonEmptyStream()", ".nonEmptyItemCopyStream()")
+    // Fabric API moved to Mojang's names
+    rename("api.client.keybinding.v1.KeyBindingHelper", "api.client.keymapping.v1.KeyMappingHelper")
+    rename("KeyBindingHelper.registerKeyBinding(", "KeyMappingHelper.registerKeyMapping(")
+    word("ClientCommandManager", "ClientCommands")
+    rename("Screens.getButtons(", "Screens.getWidgets(")
+}
+
 repositories {
     // MCPFabric — dev client only, lets Claude drive the game over MCP (CLAUDE.md 0.3)
     exclusiveContent {

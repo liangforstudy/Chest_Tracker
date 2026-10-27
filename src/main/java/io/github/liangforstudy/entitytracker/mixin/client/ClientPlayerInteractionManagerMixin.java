@@ -20,14 +20,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(MultiPlayerGameMode.class)
 public abstract class ClientPlayerInteractionManagerMixin {
+    //? if <26.2 {
     @Inject(method = "interact", at = @At("HEAD"))
     private void entitytracker$onInteractEntity(Player player, Entity entity, InteractionHand hand,
                                                 CallbackInfoReturnable<InteractionResult> cir) {
         EntityTrackerClient.interactions().set(entity);
         EntityTrackerClient.displays().onInteractEntity(entity);
     }
+    //?}
 
+    // 26.2 merged interact and interactAt into one interact that takes the hit
+    //? if >=26.2 {
+    /*@Inject(method = "interact", at = @At("HEAD"))
+    *///?} else {
     @Inject(method = "interactAt", at = @At("HEAD"))
+    //?}
     private void entitytracker$onInteractEntityAt(Player player, Entity entity, EntityHitResult hit, InteractionHand hand,
                                                   CallbackInfoReturnable<InteractionResult> cir) {
         EntityTrackerClient.interactions().set(entity);

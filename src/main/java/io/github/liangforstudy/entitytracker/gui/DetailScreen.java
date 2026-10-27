@@ -133,9 +133,7 @@ public final class DetailScreen extends Screen {
         }
         BundleContents bundle = stack.get(DataComponents.BUNDLE_CONTENTS);
         if (bundle != null && !bundle.isEmpty()) {
-            List<ItemStack> slots = new ArrayList<>();
-            for (ItemStack s : bundle.items()) slots.add(s);
-            return slots;
+            return new ArrayList<>(bundle.itemCopyStream().toList());
         }
         return null;
     }

@@ -68,9 +68,7 @@ public final class AreaConfirmScreen extends Screen {
         if (bank != null) {
             List<ContainerRecord> chosen = ticked();
             Trash.trashArea(bank, chosen);
-            if (minecraft.player != null) {
-                minecraft.player.displayClientMessage(Component.translatable("screen.entitytracker.area.done", chosen.size()), false);
-            }
+            Messages.chat(Component.translatable("screen.entitytracker.area.done", chosen.size()));
         }
         onClose();
     }

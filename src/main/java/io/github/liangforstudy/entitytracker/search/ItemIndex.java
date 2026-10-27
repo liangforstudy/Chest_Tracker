@@ -151,11 +151,11 @@ public final class ItemIndex {
         inner.add(stack.getHoverName().getString());
         ItemContainerContents container = stack.get(DataComponents.CONTAINER);
         if (container != null) {
-            for (ItemStack child : container.nonEmptyItems()) add(out, child, slot, inner, context, client, depth + 1);
+            container.nonEmptyStream().forEach(child -> add(out, child, slot, inner, context, client, depth + 1));
         }
         BundleContents bundle = stack.get(DataComponents.BUNDLE_CONTENTS);
         if (bundle != null) {
-            for (ItemStack child : bundle.items()) add(out, child, slot, inner, context, client, depth + 1);
+            bundle.itemCopyStream().forEach(child -> add(out, child, slot, inner, context, client, depth + 1));
         }
     }
 
@@ -168,9 +168,9 @@ public final class ItemIndex {
         if (bookText(stack).contains(query)) return true;
         if (depth >= MAX_DEPTH) return false;
         ItemContainerContents container = stack.get(DataComponents.CONTAINER);
-        if (container != null) for (ItemStack c : container.nonEmptyItems()) if (matchesDeep(c, query, depth + 1)) return true;
+        if (container != null && container.nonEmptyStream().anyMatch(c -> matchesDeep(c, query, depth + 1))) return true;
         BundleContents bundle = stack.get(DataComponents.BUNDLE_CONTENTS);
-        if (bundle != null) for (ItemStack c : bundle.items()) if (matchesDeep(c, query, depth + 1)) return true;
+        if (bundle != null && bundle.itemCopyStream().anyMatch(c -> matchesDeep(c, query, depth + 1))) return true;
         return false;
     }
 
@@ -202,7 +202,7 @@ public final class ItemIndex {
     private static String searchText(ItemStack stack, Item.TooltipContext context, Minecraft client) {
         StringBuilder sb = new StringBuilder(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
         // The type's own name too, so "shulker box" also finds one renamed "Kit".
-        sb.append('\n').append(stack.getItem().getName().getString());
+        sb.append('\n').append(stack.getItem().getName(stack).getString());
         // Heads: profile name and texture (plus its alias) are searchable even after renaming,
         // as plain words and as head:<name> / headtex:<hash or alias>.
         HeadInfo head = HeadInfo.of(stack);

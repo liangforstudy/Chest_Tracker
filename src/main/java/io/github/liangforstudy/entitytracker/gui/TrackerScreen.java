@@ -200,9 +200,7 @@ public final class TrackerScreen extends Screen {
             for (ContainerRecord r : records) Trash.restore(bank, r);
         } else {
             Trash.trashArea(bank, records);
-            if (minecraft.player != null) {
-                minecraft.player.displayClientMessage(Component.translatable("screen.entitytracker.area.done", records.size()), false);
-            }
+            Messages.chat(Component.translatable("screen.entitytracker.area.done", records.size()));
         }
         clearSelection();
         refresh();
@@ -802,10 +800,8 @@ public final class TrackerScreen extends Screen {
         }
         String coords = withY ? x + " " + y + " " + z : x + " " + z;
         client.keyboardHandler.setClipboard(coords);
-        if (client.player != null) {
-            client.player.displayClientMessage(Component.translatable("screen.entitytracker.detail.copied", coords,
-                    Dimensions.displayName(r.dimension)), true);
-        }
+        Messages.actionBar(Component.translatable("screen.entitytracker.detail.copied", coords,
+                Dimensions.displayName(r.dimension)));
     }
 
     /** Backdrop drawn over the vanilla one by every tracker screen. */

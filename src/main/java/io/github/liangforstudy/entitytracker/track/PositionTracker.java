@@ -13,6 +13,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -24,7 +25,6 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.npc.wanderingtrader.WanderingTrader;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import net.minecraft.world.entity.vehicle.minecart.MinecartHopper;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -36,6 +36,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import io.github.liangforstudy.entitytracker.data.TradeData;
+import io.github.liangforstudy.entitytracker.gui.Messages;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -84,7 +85,8 @@ public final class PositionTracker {
     public boolean update(EntityRecord record, Entity entity, ClientLevel world, boolean reappearing) {
         long now = System.currentTimeMillis();
         String dimension = world.dimension().identifier().toString();
-        ChunkPos chunk = entity.chunkPosition();
+        int chunkX = SectionPos.blockToSectionCoord(entity.getBlockX());
+        int chunkZ = SectionPos.blockToSectionCoord(entity.getBlockZ());
         boolean isNew = record.type == null;
         String name = entity.hasCustomName() ? entity.getCustomName().getString() : null;
         // Right after spawning, the custom name hasn't arrived from the server yet; keep the old one.
@@ -97,13 +99,13 @@ public final class PositionTracker {
         record.name = name;
         if (isNew) {
             record.firstSeen = now;
-            record.homeChunkX = chunk.x;
-            record.homeChunkZ = chunk.z;
-        } else if (!dimension.equals(record.dimension) || !isHome(record, chunk)) {
+            record.homeChunkX = chunkX;
+            record.homeChunkZ = chunkZ;
+        } else if (!dimension.equals(record.dimension) || !isHome(record, chunkX, chunkZ)) {
             EntityTrackerClient.LOGGER.info("Re-homed {} {} from chunk {},{} ({}) to {},{} ({})", record.type,
-                    record.uuid, record.homeChunkX, record.homeChunkZ, record.dimension, chunk.x, chunk.z, dimension);
-            record.homeChunkX = chunk.x;
-            record.homeChunkZ = chunk.z;
+                    record.uuid, record.homeChunkX, record.homeChunkZ, record.dimension, chunkX, chunkZ, dimension);
+            record.homeChunkX = chunkX;
+            record.homeChunkZ = chunkZ;
             record.timesRehomed++;
         }
         if (record.status == RecordStatus.LIKELY_DESTROYED) record.reappeared = true;
@@ -115,11 +117,8 @@ public final class PositionTracker {
             record.reappeared = true;
             changed = true;
             EntityTrackerClient.LOGGER.info("{} {} reappeared, restored from trash", record.type, record.uuid);
-            Minecraft client = Minecraft.getInstance();
-            if (client.player != null) {
-                client.player.displayClientMessage(Component.translatable("screen.entitytracker.reappeared",
-                        name != null ? "\"" + name + "\"" : entity.getType().getDescription().getString()), false);
-            }
+            Messages.chat(Component.translatable("screen.entitytracker.reappeared",
+                    name != null ? "\"" + name + "\"" : entity.getType().getDescription().getString()));
         }
         record.dimension = dimension;
         record.x = entity.getX();
@@ -130,9 +129,9 @@ public final class PositionTracker {
         return changed;
     }
 
-    private static boolean isHome(EntityRecord record, ChunkPos chunk) {
+    private static boolean isHome(EntityRecord record, int chunkX, int chunkZ) {
         int r = homeRadius(record);
-        return Math.abs(chunk.x - record.homeChunkX) <= r && Math.abs(chunk.z - record.homeChunkZ) <= r;
+        return Math.abs(chunkX - record.homeChunkX) <= r && Math.abs(chunkZ - record.homeChunkZ) <= r;
     }
 
     private void onLoad(Entity entity, ClientLevel world) {
