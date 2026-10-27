@@ -8,7 +8,8 @@ plugins {
 version = "${property("mod.version")}+${sc.current.version}"
 base.archivesName = property("mod.id") as String
 
-val requiredJava: JavaVersion = JavaVersion.VERSION_21
+// 26.x needs Java 25; older versions stay on 21
+val requiredJava: JavaVersion = if (loomx.isUnobfuscated) JavaVersion.VERSION_25 else JavaVersion.VERSION_21
 
 repositories {
     // MCPFabric — dev client only, lets Claude drive the game over MCP (CLAUDE.md 0.3)
@@ -20,7 +21,8 @@ repositories {
 
 dependencies {
     minecraft("com.mojang:minecraft:${sc.current.version}")
-    "mappings"(loom.officialMojangMappings())
+    // Mojang's mappings on obfuscated versions; nothing on 26.x, which ships with real names
+    loomx.applyMojangMappings()
 
     modImplementation("net.fabricmc:fabric-loader:${property("deps.fabric_loader")}")
     modImplementation("net.fabricmc.fabric-api:fabric-api:${property("deps.fabric_api")}")
@@ -41,7 +43,7 @@ loom {
         runDirectory = rootProject.file("../RnD/run")
     }
     // Fixed name so the offline UUID stays the same between runs; -PdevUser=Name for a second account
-    runs.named("client") { programArgs("--username", (findProperty("devUser") as String?) ?: "Bluetails_dev") }
+    runs.named("client") { programArguments.addAll("--username", (findProperty("devUser") as String?) ?: "Bluetails_dev") }
 }
 
 java {

@@ -14,11 +14,11 @@ plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
-// One Fabric build per Minecraft version. Only 1.21.11 for now; older versions need the
-// NBT item reader (CLAUDE.md 4.5), 26.x is planned in PORTING-26.2.md.
+// One Fabric build per Minecraft version. Older versions need the NBT item reader (CLAUDE.md 4.5);
+// the 26.2 port is tracked in PORTING-26.2.md.
 stonecutter {
     create(rootProject) {
-        versions("1.21.11")
+        versions("1.21.11", "26.2")
         vcsVersion = "1.21.11"
     }
 }

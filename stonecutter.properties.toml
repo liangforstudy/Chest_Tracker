@@ -13,3 +13,11 @@ deps.mcpfabric = "0.8.0+1.21.11"
 deps.shulkerboxtooltip = "5.2.16+1.21.11-fabric"
 deps.modmenu = "17.0.1"
 deps.placeholder_api = "2.8.2+1.21.10"
+
+["26.2"]
+mod.mc_compat = "~26.2"
+deps.fabric_api = "0.161.0+26.2"
+deps.mcpfabric = "0.8.0+26.2"
+deps.shulkerboxtooltip = "5.4.3+26.2-fabric"
+deps.modmenu = "20.0.3"
+deps.placeholder_api = "3.1.0-beta.1+26.2"

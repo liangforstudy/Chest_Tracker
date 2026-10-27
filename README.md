@@ -126,13 +126,15 @@ rules about client mods, so check yours.
 
 ## Building
 
-Needs JDK 21.
+Gradle runs on JDK 25 and downloads one if none is installed.
 
 ```
 ./gradlew build
 ```
 
-The jar ends up in `versions/1.21.11/build/libs/`. The project uses
+The jar ends up in `versions/1.21.11/build/libs/`. A 26.2 build is in progress (see
+[PORTING-26.2.md](PORTING-26.2.md)); until it compiles, build 1.21.11 alone with
+`./gradlew :1.21.11:build`. The project uses
 [Stonecutter](https://stonecutter.kikugie.dev/) and Mojang's official mappings.
 
 ## Credits

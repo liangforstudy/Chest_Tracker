@@ -37,26 +37,47 @@ No behaviour change; isolates the rename from the real 26.2 differences.
   right slots. In a normal client: hold armor and a tool, right-click the stand to put each on,
   then check the tracker shows them in the right slots. Repeat on 26.2.
 
-## Step 2: add the 26.2 node
+## Step 2: add the 26.2 node (done)
 
 - `settings.gradle.kts`: `versions("1.21.11", "26.2")`.
-- `stonecutter.gradle.kts`: declare `net.fabricmc.fabric-loom` with `apply false` next to the
-  remap plugin; upgrade Stonecutter and `loom-back-compat` to versions that handle 26.x.
+- `stonecutter.gradle.kts`: both Loom plugins declared with `apply false` at the same version
+  (1.19.3). `loom-back-compat` (already the latest, 0.4.3) treats Stonecutter versions from 26 on
+  as unobfuscated: it applies the plain `fabric-loom` there and keeps the `mod*` configurations
+  working as aliases, so the dependency block didn't need to change.
 - `build.gradle.kts`:
-  - `requiredJava` per version: 21 for 1.21.11, 25 for 26.2 (mixin `JAVA_25` follows).
-  - On 26.2: no mappings line; `implementation` / `localRuntime` instead of `mod*`.
+  - `requiredJava` follows `loomx.isUnobfuscated`: 21 for 1.21.11, 25 for 26.2 (the mixin
+    `JAVA_25` level follows from it).
+  - `loomx.applyMojangMappings()` instead of the mappings line: Mojang's mappings on 1.21.11,
+    nothing on 26.2.
+  - `runs.client`: `programArguments.addAll(...)`, since Loom 1.19 deprecates `programArgs`.
 - `stonecutter.properties.toml`: `["26.2"]` block with `mod.mc_compat = "~26.2"` and the
-  dependency versions above.
-- Gradle JVM needs JDK 25. The wrapper (9.8.1) is already newer than Fabric's recommended 9.5.1.
+  dependency versions above. Mod Menu still needs Placeholder API, which only has a beta for 26.2
+  (dev client only).
+- Loom 1.19 is built for Java 25, so Gradle itself must run on JDK 25.
+  `gradle/gradle-daemon-jvm.properties` (written by `./gradlew updateDaemonJvm --jvm-version=25`)
+  makes Gradle use an installed JDK 25 or download one. Compiling 1.21.11 still targets Java 21
+  through toolchains (checked: class files are version 65).
+- Checked: both versions configure, all 26.2 dependencies resolve, and the 1.21.11 jar builds as
+  before. `:26.2:compileJava` fails as expected (step 3); `./gradlew build` builds both versions,
+  so it fails until step 3 is done. Use `./gradlew :1.21.11:build` until then.
 - Version differences go in `//? if >=26.2` blocks.
 
 ## Step 3: code changes for 26.2
+
+The first `:26.2:compileJava` stopped at javac's 100-error limit, so there are more than that.
+Most are the screen-rendering and `setScreen` rows below; the busiest files are `TrackerScreen`,
+`DebugCommand`, `TradesScreen`, `TradeDetailScreen`, `DetailScreen` and `OpenTriggers`.
 
 | Area | 1.21.11 (Mojang names) | 26.2 | Where |
 |---|---|---|---|
 | Entity interaction | `interact(Player, Entity, Hand)` **and** `interactAt(...)` | **Merged** into one `interact(Player, Entity, EntityHitResult, Hand)` | `ClientPlayerInteractionManagerMixin`: two injections become one, or `defaultRequire: 1` crashes at startup |
 | Screen rendering | `render(GuiGraphics, ...)` | `extractRenderState(GuiGraphicsExtractor, ...)`; methods renamed: `item()`, `text()`, `blitSprite()`, `setTooltipForNextFrame()` | All of `gui/*` (about 25 call sites) |
 | Current screen | `minecraft.setScreen()`, `minecraft.screen` | `minecraft.gui.setScreen()`, `minecraft.gui.screen()` | About 20 call sites, `OpenTriggers` |
+| Selection lists | `Entry.renderContent(GuiGraphics, ...)` | `Entry.extractContent(GuiGraphicsExtractor, int, int, boolean, float)` | The `Entry` classes in `TrackerScreen`, `TradesScreen`, `TradeDetailScreen`, `AreaConfirmScreen` |
+| Item stacks | Many methods return `ItemStack` | Some now return the immutable `ItemStackTemplate` (about 10 places) | Mostly `ItemIndex`, `TrackerScreen` |
+| Fabric API | `KeyBindingHelper` (`client.keybinding.v1`), `ClientCommandManager.literal/argument` | Renamed to official names; packages moved | `OpenTriggers`, `DebugCommand` |
+| Chat messages | `player.displayClientMessage(Component, boolean)` | Gone from `LocalPlayer`; find the 26.2 replacement | `AreaConfirmScreen`, `TrackerScreen` |
+| Item names | `Item.getName(ItemStack)` | Signature changed | `ItemIndex` |
 | Book reader | `BookViewScreen.BookAccess.fromItem` | Unchanged | `DetailScreen.Reader` |
 | Packets | `handleContainerContent`, `handleMerchantOffers` | Unchanged | `ClientPlayNetworkHandlerMixin` |
 | Riding inventory | `LocalPlayer.sendOpenInventory` | Unchanged | `ClientPlayerEntityMixin` |
@@ -140,7 +161,7 @@ changed between 1.21.11 and 26.2, so old items may fail to parse and show as emp
 ## Order of work
 
 1. Mojang names on 1.21.11 (done)
-2. Gradle setup for 26.2
+2. Gradle setup for 26.2 (done)
 3. Code changes until it compiles
 4. Save-format data version and upgrade
 5. Run the test plan, update README and ROADMAP
