@@ -419,7 +419,7 @@ public final class DebugCommand {
                 items += r.items();
                 raw += r.rawItems();
                 skipped += r.skipped();
-                if (ChestTrackerImport.otherVersion(r)) otherVersion = r.dataVersion();
+                if (ChestTrackerImport.newerVersion(r)) otherVersion = r.dataVersion();
             }
             ChestTrackerImport.MergeResult merged = ChestTrackerImport.merge(bank, records, bank.currentPlayer);
             source.sendFeedback(Component.literal("Imported from Chest Tracker: " + merged.added() + " new, "
@@ -430,7 +430,7 @@ public final class DebugCommand {
             }
             if (skipped > 0) source.sendFeedback(Component.literal(skipped + " entries were unreadable and skipped."));
             if (otherVersion != 0) {
-                source.sendFeedback(Component.literal("A file is from another Minecraft version (data version "
+                source.sendFeedback(Component.literal("A file is from a newer Minecraft version (data version "
                         + otherVersion + "); some items may not show correctly."));
             }
             EntityTrackerClient.LOGGER.info("Imported {} into bank {}: {}, {} stacks", names, bank.key, merged, items);

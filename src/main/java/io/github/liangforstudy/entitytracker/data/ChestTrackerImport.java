@@ -2,7 +2,6 @@ package io.github.liangforstudy.entitytracker.data;
 
 import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
-import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -144,9 +143,12 @@ public final class ChestTrackerImport {
         return new Result(records, items, rawItems, skipped, dataVersion);
     }
 
-    /** True when the file was written by another Minecraft version (items may not read right). */
-    public static boolean otherVersion(Result result) {
-        return result.dataVersion() != 0 && result.dataVersion() != SharedConstants.getCurrentVersion().dataVersion().version();
+    /**
+     * True when the file was written by a newer Minecraft version (items may not read right). Older
+     * files are fine: their items were upgraded on reading.
+     */
+    public static boolean newerVersion(Result result) {
+        return result.dataVersion() > ItemData.CURRENT;
     }
 
     /**
