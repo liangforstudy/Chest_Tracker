@@ -78,31 +78,22 @@ public final class DetailScreen extends Screen {
     @Override
     protected void init() {
         if (top == null) top = new Level(TrackerScreen.label(record), decodeSlots());
-        int buttonY = height - 26;
-        viewBottom = buttonY - 4;
-        boolean actions = !(record instanceof InventoryRecord);
-        int count = actions ? 5 : 2;
-        int w = Math.min(100, (width - 40) / count);
-        int x = width / 2 - (w * count + 4 * (count - 1)) / 2;
-        addRenderableWidget(Button.builder(Component.translatable("screen.entitytracker.detail.back"), b -> back())
-                .bounds(x, buttonY, w, 20).build());
-        x += w + 4;
-        if (actions) {
-            addRenderableWidget(Button.builder(Component.translatable("screen.entitytracker.detail.copy_xyz"),
-                    b -> TrackerScreen.copyCoords(minecraft, record, true)).bounds(x, buttonY, w, 20).build());
-            x += w + 4;
-            addRenderableWidget(Button.builder(Component.translatable("screen.entitytracker.detail.copy_xz"),
+        List<Button> buttons = new ArrayList<>();
+        buttons.add(Button.builder(Component.translatable("screen.entitytracker.detail.back"), b -> back()).build());
+        if (!(record instanceof InventoryRecord)) {
+            buttons.add(Button.builder(Component.translatable("screen.entitytracker.detail.copy_xyz"),
+                    b -> TrackerScreen.copyCoords(minecraft, record, true)).build());
+            buttons.add(Button.builder(Component.translatable("screen.entitytracker.detail.copy_xz"),
                     b -> TrackerScreen.copyCoords(minecraft, record, false))
                     .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("screen.entitytracker.detail.copy_xz_tip")))
-                    .bounds(x, buttonY, w, 20).build());
-            x += w + 4;
-            addRenderableWidget(Button.builder(record.isTrashed()
+                    .build());
+            buttons.add(Button.builder(record.isTrashed()
                     ? Component.translatable("screen.entitytracker.restore") : TrackerScreen.markLabel(record), b -> toggleTrash())
-                    .bounds(x, buttonY, w, 20).build());
-            x += w + 4;
+                    .build());
         }
-        addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, b -> minecraft.setScreen(null))
-                .bounds(x, buttonY, w, 20).build());
+        buttons.add(Button.builder(CommonComponents.GUI_DONE, b -> minecraft.setScreen(null)).build());
+        viewBottom = ButtonBar.layout(buttons, font, width, height, 100) - 4;
+        for (Button b : buttons) addRenderableWidget(b);
     }
 
     private List<ItemStack> decodeSlots() {
@@ -133,9 +124,7 @@ public final class DetailScreen extends Screen {
         }
         BundleContents bundle = stack.get(DataComponents.BUNDLE_CONTENTS);
         if (bundle != null && !bundle.isEmpty()) {
-            List<ItemStack> slots = new ArrayList<>();
-            for (ItemStack s : bundle.items()) slots.add(s);
-            return slots;
+            return new ArrayList<>(bundle.itemCopyStream().toList());
         }
         return null;
     }

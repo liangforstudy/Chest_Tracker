@@ -1,7 +1,9 @@
 plugins {
     id("dev.kikugie.stonecutter")
-    // Loom for obfuscated versions (<= 1.21.x); loom-back-compat applies it per version.
-    id("net.fabricmc.fabric-loom-remap") version "1.17.21" apply false
+    // Both Loom variants, same version; loom-back-compat applies the right one per Minecraft version:
+    // the remapping one for obfuscated versions (<= 1.21.x), the plain one for unobfuscated 26.x.
+    id("net.fabricmc.fabric-loom-remap") version "1.19.3" apply false
+    id("net.fabricmc.fabric-loom") version "1.19.3" apply false
 }
 
 stonecutter active "1.21.11"

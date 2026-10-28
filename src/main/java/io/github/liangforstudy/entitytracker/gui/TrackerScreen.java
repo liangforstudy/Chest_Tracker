@@ -20,6 +20,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Stream;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -53,6 +54,8 @@ public final class TrackerScreen extends Screen {
     private int lastToggled = -1;
     // Normal bar / bulk bar buttons; shown and hidden in place so the list keeps its scroll.
     private Button viewButton, destroyedButton, selectButton, doneButton;
+    /** In the trash: one button per kind, the open one greyed out. */
+    private final List<Button> kindButtons = new ArrayList<>();
     private Button bulkPrimary, bulkDelete, selectAllButton, cancelButton;
     private int tooltipX, tooltipY;
     private ResultList list;
@@ -66,12 +69,41 @@ public final class TrackerScreen extends Screen {
     private boolean waitingForBank;
     /** false = remembered containers, true = the trash. */
     private boolean trashView;
+    /** Which part of the trash is open. Kept apart so broken blocks don't bury entities. */
+    private TrashKind trashKind = TrashKind.ENTITIES;
+
+    /** The trash's three views: storage entities, villagers and traders, and blocks. */
+    public enum TrashKind {
+        ENTITIES("screen.entitytracker.trash.entities"),
+        TRADES("screen.entitytracker.trash.trades"),
+        BLOCKS("screen.entitytracker.trash.blocks");
+
+        final String key;
+
+        TrashKind(String key) {
+            this.key = key;
+        }
+
+        Stream<? extends ContainerRecord> trashed(MemoryBank bank) {
+            Stream<? extends ContainerRecord> all = this == TRADES ? bank.traders()
+                    : bank.containers().filter(r -> (r instanceof BlockRecord) == (this == BLOCKS));
+            return all.filter(ContainerRecord::isTrashed);
+        }
+    }
     /** The open row menu (right-click or the row's "⋮"), empty when closed. */
     private final List<Button> menu = new ArrayList<>();
     private int menuX, menuY, menuW, menuH;
 
     public TrackerScreen() {
         super(Component.translatable("screen.entitytracker.title"));
+    }
+
+    /** Opens straight into one part of the trash (the Trades screen's Trash button). */
+    public static TrackerScreen trash(TrashKind kind) {
+        TrackerScreen screen = new TrackerScreen();
+        screen.trashView = true;
+        screen.trashKind = kind;
+        return screen;
     }
 
     @Override
@@ -91,14 +123,26 @@ public final class TrackerScreen extends Screen {
 
         // Bottom bar: views and filters, or bulk actions while something is selected.
         menu.clear();
+        // "Trash (n)" in the list, "<- Back to list" in the trash, which has a button per kind.
         viewButton = addRenderableWidget(Button.builder(trashLabel(), b -> {
             trashView = !trashView;
             clearSelection();
             rebuildWidgets();
         }).build());
+        kindButtons.clear();
+        for (TrashKind kind : TrashKind.values()) {
+            Button button = addRenderableWidget(Button.builder(kindLabel(kind), b -> {
+                trashKind = kind;
+                clearSelection();
+                rebuildWidgets();
+            }).build());
+            button.active = kind != trashKind;
+            kindButtons.add(button);
+        }
         destroyedButton = addRenderableWidget(Button.builder(destroyedLabel(), b -> {
             showDestroyed = !showDestroyed;
             b.setMessage(destroyedLabel());
+            updateBar();
             refresh();
         }).build());
         selectButton = addRenderableWidget(Button.builder(Component.translatable("screen.entitytracker.select"), b -> {
@@ -128,9 +172,22 @@ public final class TrackerScreen extends Screen {
     /** "Trash (3)" in the list, "<- Back to list" in the trash: a place to go, not a mode. */
     private Component trashLabel() {
         if (trashView) return Component.translatable("screen.entitytracker.trash_back");
+        return Component.translatable("screen.entitytracker.trash_open", totalTrashed());
+    }
+
+    /** Everything in the trash, all three kinds. */
+    public static long totalTrashed() {
         MemoryBank bank = EntityTrackerClient.banks().bank();
-        long n = bank == null ? 0 : bank.containers().filter(ContainerRecord::isTrashed).count();
-        return Component.translatable("screen.entitytracker.trash_open", n);
+        if (bank == null) return 0;
+        long n = 0;
+        for (TrashKind kind : TrashKind.values()) n += kind.trashed(bank).count();
+        return n;
+    }
+
+    /** "Entities (3)", "Trades (1)", "Blocks (9)". */
+    private static Component kindLabel(TrashKind kind) {
+        MemoryBank bank = EntityTrackerClient.banks().bank();
+        return Component.translatable(kind.key, bank == null ? 0 : kind.trashed(bank).count());
     }
 
     private Component destroyedLabel() {
@@ -146,6 +203,7 @@ public final class TrackerScreen extends Screen {
                 selectAllButton, cancelButton)) {
             b.visible = false;
         }
+        for (Button b : kindButtons) b.visible = false;
         if (bulk) {
             int n = selection.size();
             bulkPrimary.setMessage(Component.translatable(trashView ? "screen.entitytracker.bulk.restore"
@@ -161,17 +219,15 @@ public final class TrackerScreen extends Screen {
             shown.add(cancelButton);
         } else {
             shown.add(viewButton);
-            if (!trashView) shown.add(destroyedButton);
+            if (trashView) shown.addAll(kindButtons);
+            else shown.add(destroyedButton);
             shown.add(selectButton);
             shown.add(doneButton);
         }
-        int w = Math.min(120, (width - 40) / shown.size());
-        int x = width / 2 - (w * shown.size() + 4 * (shown.size() - 1)) / 2;
-        for (Button b : shown) {
-            b.visible = true;
-            b.setRectangle(w, 20, x, height - 26);
-            x += w + 4;
-        }
+        for (Button b : shown) b.visible = true;
+        // The list ends above the buttons, which take two rows on a narrow screen
+        int top = ButtonBar.layout(shown, font, width, height, 120);
+        list.updateSizeAndPosition(width, top - 4 - LIST_Y, LIST_Y);
     }
 
     private void clearSelection() {
@@ -200,9 +256,7 @@ public final class TrackerScreen extends Screen {
             for (ContainerRecord r : records) Trash.restore(bank, r);
         } else {
             Trash.trashArea(bank, records);
-            if (minecraft.player != null) {
-                minecraft.player.displayClientMessage(Component.translatable("screen.entitytracker.area.done", records.size()), false);
-            }
+            Messages.chat(Component.translatable("screen.entitytracker.area.done", records.size()));
         }
         clearSelection();
         refresh();
@@ -345,7 +399,11 @@ public final class TrackerScreen extends Screen {
      * and typing never waits for a big base to be searched to the end.
      */
     private void refresh() {
-        if (viewButton != null) viewButton.setMessage(trashLabel());
+        if (viewButton != null) {
+            viewButton.setMessage(trashLabel());
+            for (TrashKind kind : TrashKind.values()) kindButtons.get(kind.ordinal()).setMessage(kindLabel(kind));
+            updateBar(); // "Trash (n)" grows with n
+        }
         String query = search.getValue().trim().toLowerCase(Locale.ROOT);
         if (query.startsWith("@")) query = query.substring(1); // @head:Notch until full filters (4.6)
         fuzzy = false;
@@ -392,9 +450,9 @@ public final class TrackerScreen extends Screen {
         // Your own inventory first, so "it was on me all along" is the first thing you see.
         InventoryRecord onMe = trashView ? null : InventoryRecord.current();
         if (onMe != null) records.add(onMe);
-        records.addAll(bank.containers()
-                .filter(r -> trashView ? r.isTrashed()
-                        : !r.isTrashed() && (showDestroyed || r.status != RecordStatus.LIKELY_DESTROYED))
+        Stream<? extends ContainerRecord> shown = trashView ? trashKind.trashed(bank)
+                : bank.containers().filter(r -> !r.isTrashed() && (showDestroyed || r.status != RecordStatus.LIKELY_DESTROYED));
+        records.addAll(shown
                 .sorted(Comparator.comparingDouble(TrackerScreen::sortDistance))
                 .toList());
         return records;
@@ -683,7 +741,11 @@ public final class TrackerScreen extends Screen {
                     updateBar();
                 } else {
                     String q = search.getValue().trim().toLowerCase(Locale.ROOT);
-                    minecraft.setScreen(new DetailScreen(row.record(), TrackerScreen.this, q.startsWith("@") ? q.substring(1) : q));
+                    if (row.record() instanceof EntityRecord trader && trader.isTrader()) {
+                        minecraft.setScreen(new TradeDetailScreen(trader, TrackerScreen.this, ""));
+                    } else {
+                        minecraft.setScreen(new DetailScreen(row.record(), TrackerScreen.this, q.startsWith("@") ? q.substring(1) : q));
+                    }
                 }
                 return true;
             }
@@ -706,7 +768,7 @@ public final class TrackerScreen extends Screen {
     }
 
     public static String label(ContainerRecord r) {
-        if (r instanceof InventoryRecord) return Component.translatable("screen.entitytracker.on_me").getString();
+        if (r instanceof InventoryRecord) return Component.translatable("screen.entitytracker.on_me", r.name).getString();
         String type = r instanceof BlockRecord
                 ? BuiltInRegistries.BLOCK.getValue(Identifier.parse(r.type)).getName().getString()
                 : Component.translatable(BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.parse(r.type)).getDescriptionId()).getString();
@@ -773,12 +835,15 @@ public final class TrackerScreen extends Screen {
 
     /**
      * The status as shown: a mob (donkey, llama, villager...) that is likely destroyed "died";
-     * minecarts, boats and blocks stay "likely destroyed".
+     * minecarts and boats stay "likely destroyed". A gone block is certain (its chunk is loaded):
+     * "destroyed", or "picked up" for a shulker box.
      */
     public static String statusId(ContainerRecord r) {
         if (r.status == RecordStatus.LIKELY_DESTROYED && r instanceof EntityRecord e && isMob(e)) return "died";
-        // A broken shulker box keeps its contents and drops as an item: picked up, not destroyed.
-        if (r.status == RecordStatus.LIKELY_DESTROYED && r instanceof BlockRecord && r.type.endsWith("shulker_box")) return "picked_up";
+        if (r.status == RecordStatus.LIKELY_DESTROYED && r instanceof BlockRecord) {
+            // A broken shulker box keeps its contents and drops as an item: picked up, not destroyed.
+            return r.type.endsWith("shulker_box") ? "picked_up" : "destroyed";
+        }
         return r.status.name().toLowerCase(Locale.ROOT);
     }
 
@@ -802,10 +867,8 @@ public final class TrackerScreen extends Screen {
         }
         String coords = withY ? x + " " + y + " " + z : x + " " + z;
         client.keyboardHandler.setClipboard(coords);
-        if (client.player != null) {
-            client.player.displayClientMessage(Component.translatable("screen.entitytracker.detail.copied", coords,
-                    Dimensions.displayName(r.dimension)), true);
-        }
+        Messages.actionBar(Component.translatable("screen.entitytracker.detail.copied", coords,
+                Dimensions.displayName(r.dimension)));
     }
 
     /** Backdrop drawn over the vanilla one by every tracker screen. */

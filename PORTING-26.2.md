@@ -25,40 +25,76 @@ No behaviour change; isolates the rename from the real 26.2 differences.
   `interactEntityAtLocation` → `interactAt`, `interactBlock` → `useItemOn`.
 - Fabric API class names (`ScreenEvents`, `Screens`, `KeyBindingHelper`, ...) stay as they are
   on 1.21.11; Fabric API only renames them from 26.1 on, so that belongs to step 2.
-- Play-test on 1.21.11 (the in-game list below, minus the 26.2-only items). Any difference is a
-  rename mistake.
+- Play-tested on 1.21.11 in a dev client driven through MCPFabric: chest, donkey (mount and
+  sneak-open), villager trades, item frame, armor stand, chest boat via the inventory key while
+  riding, and the tracker and Trades screens all recorded and rendered correctly.
 
-## Step 2: add the 26.2 node
+### Still to check by hand
+
+- **Equipping an armor stand by right-click.** Clicking a stand through MCPFabric while holding
+  an iron helmet returned `Pass` and nothing was equipped, most likely because of where the
+  bridge aims. The mod's hook still fired, and a stand equipped by command was recorded with the
+  right slots. In a normal client: hold armor and a tool, right-click the stand to put each on,
+  then check the tracker shows them in the right slots. On 26.2 the same click through MCPFabric
+  did equip the helmet and the tracker recorded it, so only 1.21.11 still needs this by hand.
+
+## Step 2: add the 26.2 node (done)
 
 - `settings.gradle.kts`: `versions("1.21.11", "26.2")`.
-- `stonecutter.gradle.kts`: declare `net.fabricmc.fabric-loom` with `apply false` next to the
-  remap plugin; upgrade Stonecutter and `loom-back-compat` to versions that handle 26.x.
+- `stonecutter.gradle.kts`: both Loom plugins declared with `apply false` at the same version
+  (1.19.3). `loom-back-compat` (already the latest, 0.4.3) treats Stonecutter versions from 26 on
+  as unobfuscated: it applies the plain `fabric-loom` there and keeps the `mod*` configurations
+  working as aliases, so the dependency block didn't need to change.
 - `build.gradle.kts`:
-  - `requiredJava` per version: 21 for 1.21.11, 25 for 26.2 (mixin `JAVA_25` follows).
-  - On 26.2: no mappings line; `implementation` / `localRuntime` instead of `mod*`.
+  - `requiredJava` follows `loomx.isUnobfuscated`: 21 for 1.21.11, 25 for 26.2 (the mixin
+    `JAVA_25` level follows from it).
+  - `loomx.applyMojangMappings()` instead of the mappings line: Mojang's mappings on 1.21.11,
+    nothing on 26.2.
+  - `runs.client`: `programArguments.addAll(...)`, since Loom 1.19 deprecates `programArgs`.
 - `stonecutter.properties.toml`: `["26.2"]` block with `mod.mc_compat = "~26.2"` and the
-  dependency versions above.
-- Gradle JVM needs JDK 25. The wrapper (9.8.1) is already newer than Fabric's recommended 9.5.1.
+  dependency versions above. Mod Menu still needs Placeholder API, which only has a beta for 26.2
+  (dev client only).
+- Loom 1.19 is built for Java 25, so Gradle itself must run on JDK 25.
+  `gradle/gradle-daemon-jvm.properties` (written by `./gradlew updateDaemonJvm --jvm-version=25`)
+  makes Gradle use an installed JDK 25 or download one. Compiling 1.21.11 still targets Java 21
+  through toolchains (checked: class files are version 65).
+- Checked: both versions configure, all 26.2 dependencies resolve, and the 1.21.11 jar builds as
+  before.
 - Version differences go in `//? if >=26.2` blocks.
 
-## Step 3: code changes for 26.2
+## Step 3: code changes for 26.2 (done)
 
-| Area | 1.21.11 (Mojang names) | 26.2 | Where |
+`./gradlew build` builds both jars: 1.21.11 (Java 21, `JAVA_21` mixins, `~1.21.11`) and 26.2
+(Java 25, `JAVA_25` mixins, `~26.2`). There were 137 compile errors, nearly all renames, so most
+of the port is a list of Stonecutter replacements in `build.gradle.kts` instead of a `//?` block
+at every call site. Each pattern is scoped (to the `context` graphics variable, a receiver or a
+whole word) so it can't hit unrelated code, and the 26.2 side never appears in the 1.21.11
+sources, so the 1.21.11 build is untouched.
+
+| Area | 1.21.11 (Mojang names) | 26.2 | How it's handled |
 |---|---|---|---|
-| Entity interaction | `interact(Player, Entity, Hand)` **and** `interactAt(...)` | **Merged** into one `interact(Player, Entity, EntityHitResult, Hand)` | `ClientPlayerInteractionManagerMixin`: two injections become one, or `defaultRequire: 1` crashes at startup |
-| Screen rendering | `render(GuiGraphics, ...)` | `extractRenderState(GuiGraphicsExtractor, ...)`; methods renamed: `item()`, `text()`, `blitSprite()`, `setTooltipForNextFrame()` | All of `gui/*` (about 25 call sites) |
-| Current screen | `minecraft.setScreen()`, `minecraft.screen` | `minecraft.gui.setScreen()`, `minecraft.gui.screen()` | About 20 call sites, `OpenTriggers` |
-| Book reader | `BookViewScreen.BookAccess.fromItem` | Unchanged | `DetailScreen.Reader` |
-| Packets | `handleContainerContent`, `handleMerchantOffers` | Unchanged | `ClientPlayNetworkHandlerMixin` |
-| Riding inventory | `LocalPlayer.sendOpenInventory` | Unchanged | `ClientPlayerEntityMixin` |
-| Mount menu | `AbstractMountInventoryMenu.mount` | Unchanged | `MountScreenHandlerAccessor` |
-| Villagers | `VillagerData.profession()` (a `Holder`) | Package moved to `entity.npc.villager` | `TradeBinder`, `TradeView` |
-| Trades | `MerchantOffer` getters | Unchanged on the client (trades are data-driven server-side since 26.1) | `TradeData` |
-| Fabric API | Yarn-style names | Renamed to official names (see the Fabric Docs migration map) | `OpenTriggers`, `ScreenBinder`, `TradeBinder`, `EntityTrackerClient` |
-| Others | `NbtIo.readCompressed(Path, NbtAccounter)`, `DimensionType.coordinateScale()`, `KeyMapping.Category`, `ItemStack.CODEC` | Unchanged (only some entity packages moved, e.g. `AbstractChestedHorse`, `WanderingTrader`) | |
+| Screen rendering | `render`, `renderBackground`, `Entry.renderContent` with `GuiGraphics`; `drawString`, `drawCenteredString`, `renderItem`, `renderItemDecorations` | `extractRenderState`, `extractBackground`, `Entry.extractContent` with `GuiGraphicsExtractor`; `text`, `centeredText`, `item`, `itemDecorations` | Replacements |
+| Current screen | `minecraft.setScreen()`, `client.screen` | `minecraft.gui.setScreen()`, `client.gui.screen()` | Replacements |
+| Fabric API | `KeyBindingHelper.registerKeyBinding`, `ClientCommandManager`, `Screens.getButtons` | `KeyMappingHelper.registerKeyMapping`, `ClientCommands`, `Screens.getWidgets` | Replacements |
+| Shulker contents | `ItemContainerContents.nonEmptyStream()` | `nonEmptyItemCopyStream()` (`nonEmptyItems()` now gives `ItemStackTemplate`s) | Replacement; loops use streams |
+| Bundle contents | `BundleContents.items()` | `items()` gives `ItemStackTemplate`s | `itemCopyStream()`, which both versions have |
+| Item names | `Item.getName()` | Only `getName(ItemStack)` | `getName(stack)` on both |
+| Chunk position | `ChunkPos.x` / `.z` fields | `x()` / `z()` accessors | `SectionPos.blockToSectionCoord` on both |
+| Chat messages | `player.displayClientMessage(c, overlay)` | `sendSystemMessage(c)` / `sendOverlayMessage(c)` | `gui.Messages` helper, one `//?` switch each |
+| Entity interaction | `interact(Player, Entity, Hand)` and `interactAt(..., EntityHitResult, Hand)` | Merged into one `interact(Player, Entity, EntityHitResult, Hand)` | `//?` switch in `ClientPlayerInteractionManagerMixin` (a wrong target crashes at startup) |
+| Unchanged | Packet handlers, `LocalPlayer.sendOpenInventory`, `AbstractMountInventoryMenu.mount`, `BookViewScreen.BookAccess`, `MerchantOffer`, `NbtIo`, `DimensionType.coordinateScale()`, `KeyMapping.Category`, `ItemStack.CODEC` | | |
 
-Also watch for `ItemStack`s created before a world is loaded (static fields): not allowed since
-26.1, make them lazy or use `ItemStackTemplate`.
+Played on 26.2 in the dev client through MCPFabric, on a copy of the 1.21.11 test world:
+- No mixin errors at startup or on joining the world.
+- The 1.21.11 bank loaded (the bank is chosen by world name, so the copy used the same one):
+  the tracker, chest detail view and trade detail rendered its items, enchantments included.
+- Chest (with a named shulker box holding netherite added, found by searching "netherite"),
+  donkey (sneak-open), villager trades, a new glow item frame, an armor stand (helmet put on by
+  right-click, chestplate and shield by command) and a chest boat opened with the inventory key
+  while riding were all recorded with the right slots, and saved in the 26.2 item format.
+- `LocalPlayer.sendSystemMessage` / `sendOverlayMessage` go through the same chat listener calls
+  as 1.21.11's `displayClientMessage`, so messages behave the same.
+- Loading a 1.21.11 world in 26.2 shows "Create a backup before upgrading this world?" first.
 
 ## Step 4: save format
 
@@ -72,6 +108,10 @@ changed between 1.21.11 and 26.2, so old items may fail to parse and show as emp
   back up and warn when it sees a newer `dataVersion`.
 - `/etracker import`: run imported stacks through the same upgrade (`ChestTrackerImport`
   already reads the data version).
+- Found while testing step 3: simple items (diamonds, an enchanted book, a named sword) from a
+  1.21.11 bank already read fine on 26.2. Both dev clients share `../RnD/run`, so 26.2 rewrites
+  the same bank files in its own format; the mod's daily backup kept the 1.21.11 copy
+  (`entity-tracker/backups/`). Test the way back by opening such a bank in 1.21.11 again.
 
 ## In-game test plan (26.2; singleplayer and a Paper/Fabric server)
 
@@ -113,7 +153,7 @@ changed between 1.21.11 and 26.2, so old items may fail to parse and show as emp
 
 **Search and detection**
 
-15. Fuzzy search ("dimond"), enchantments, lore, head names, book text, "On me",
+15. Fuzzy search ("dimond"), enchantments, lore, head names, book text, "On <player>",
     Nether/Overworld coordinate conversion.
 16. Kill a donkey, take one through a portal, remove a donkey's chest, break a chest; hopper
     hints; last-checked days.
@@ -128,11 +168,45 @@ changed between 1.21.11 and 26.2, so old items may fail to parse and show as emp
 18. With ShulkerBoxTooltip and Mod Menu: no crashes, no clash on the inventory button.
 19. On a laggy server: screens still bind to the right container.
 
+### Results so far (Paper 26.2 build 135, 26.2 dev client through MCPFabric)
+
+Server: a copy of the 1.21.11 Paper test world, so the existing bank lined up with it.
+
+- 1-2: no mixin errors; `/etracker`, `/offers` and the screens open.
+- 3: the 1.21.11 bank (76 records) loaded: nested shulker/bundle items, custom names, player
+  heads, enchanted books and written books all found by search.
+- 5-6: mule and llama (sneak-click), chest minecart and hopper minecart (click) recorded with
+  the right contents.
+- 7: item frame rotate (no change), take out (item dropped from the record), put in (recorded);
+  armor stand helmet swap by right-click recorded.
+- 9: single, double (one record, both halves), trapped and copper chests, barrel, hopper, blast
+  furnace, smoker, dispenser, dropper, crafter, brewing stand, shulker box, ender chest. The
+  crafter was never recorded on either version (its screen has a 10th slot, the result);
+  fixed by not counting result slots.
+- 10: shelf, decorated pot (hand insert counted through the wobble), jukebox (hand-placed disc
+  remembered, server-filled one gets "holds something not seen yet"), lectern (hand-placed book
+  found by page text; server-placed one remembered on opening), chiseled bookshelf.
+- 11, 13: tracker and Trades lists render (icons, statuses, hints, trade arrows, out of stock).
+- 16: killed mule "likely died", llama chest removed "chest removed", destroyed minecart
+  "likely destroyed". A killed animal also got "chest removed" (it drops its chest during the
+  death animation); fixed by ignoring dying animals.
+
+- Gone block containers now go to the trash by themselves (user's decision): on joining, the
+  pots, shulker box and chest removed in earlier tests were trashed; a pot broken by hand was
+  trashed and left search; putting a pot back at that spot restored the record as never opened.
+  Gone blocks show "destroyed" ("picked up" for a shulker box). One Trash button opens a trash
+  with Entities, Trades and Blocks views; the Trades screen's Trash button opens it on Trades.
+
+Still to do: 4 (the way back to 1.21.11, needs step 4), 8 (trading and level-up), 12 (detail
+view, book reader: needs hand tapping), 14 (GUI scales, resize, Vulkan: by hand), 15 (fuzzy
+search in the screen, dimension conversion), 17, 18 (inventory button with Mod Menu), 19 (lag
+proxy), mounted inventory key (by hand).
+
 ## Order of work
 
 1. Mojang names on 1.21.11 (done)
-2. Gradle setup for 26.2
-3. Code changes until it compiles
+2. Gradle setup for 26.2 (done)
+3. Code changes until it compiles (done)
 4. Save-format data version and upgrade
 5. Run the test plan, update README and ROADMAP
 

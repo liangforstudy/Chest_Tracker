@@ -248,7 +248,7 @@ public final class DebugCommand {
         String contents = r.hasSnapshot()
                 ? r.items.stream().map(DebugCommand::stackSummary).collect(Collectors.joining(", "))
                 : "never opened";
-        if (r instanceof InventoryRecord) return "- On me: " + contents;
+        if (r instanceof InventoryRecord) return "- " + TrackerScreen.label(r) + ": " + contents;
         String place = r instanceof EntityRecord e ? "home chunk " + e.homeChunkX + "," + e.homeChunkZ
                 : r instanceof BlockRecord b && b.global ? "ender chest"
                 : "at " + ((BlockRecord) r).pos.toShortString()

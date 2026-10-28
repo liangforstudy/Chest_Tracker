@@ -38,14 +38,13 @@ public final class TradesScreen extends Screen {
 
     private EditBox search;
     private ResultList list;
-    /** false = remembered villagers, true = the trash. */
-    private boolean trashView;
     /** The results shown are close matches, not exact ones. */
     private boolean fuzzy;
     /** Wandering traders come and go; this hides them all at once. Kept while the game runs. */
     private static boolean showWandering = true;
     /** The open row menu (right-click or the row's "⋮"), empty when closed. */
     private final List<Button> menu = new ArrayList<>();
+    private List<Button> bar = List.of();
     private int menuX, menuY, menuW, menuH;
 
     private final String initialQuery;
@@ -58,6 +57,12 @@ public final class TradesScreen extends Screen {
     public TradesScreen(String query) {
         super(Component.translatable("screen.entitytracker.trades.title"));
         this.initialQuery = query;
+    }
+
+    /** The bottom buttons, and the list ending above them (they take two rows on a narrow screen). */
+    private void layoutBar() {
+        int top = ButtonBar.layout(bar, font, width, height, 120);
+        list.updateSizeAndPosition(width, top - 4 - TrackerScreen.LIST_Y, TrackerScreen.LIST_Y);
     }
 
     @Override
@@ -75,24 +80,19 @@ public final class TradesScreen extends Screen {
         addRenderableWidget(list);
         for (Button tab : ScreenTabs.create(minecraft, width, true)) addRenderableWidget(tab);
 
-        List<Button.Builder> bar = List.of(
-                Button.builder(trashLabel(), b -> {
-                    trashView = !trashView;
-                    rebuildWidgets();
-                }),
+        bar = List.of(
+                // One trash for everything: opens on its Trades part.
+                Button.builder(trashLabel(), b -> minecraft.setScreen(TrackerScreen.trash(TrackerScreen.TrashKind.TRADES))).build(),
                 Button.builder(wanderingLabel(), b -> {
                     showWandering = !showWandering;
                     b.setMessage(wanderingLabel());
+                    layoutBar();
                     refresh();
-                }),
-                Button.builder(CommonComponents.GUI_DONE, b -> onClose()));
+                }).build(),
+                Button.builder(CommonComponents.GUI_DONE, b -> onClose()).build());
         menu.clear();
-        int w = Math.min(120, (width - 40) / bar.size());
-        int x = width / 2 - (w * bar.size() + 4 * (bar.size() - 1)) / 2;
-        for (Button.Builder b : bar) {
-            addRenderableWidget(b.bounds(x, height - 26, w, 20).build());
-            x += w + 4;
-        }
+        for (Button b : bar) addRenderableWidget(b);
+        layoutBar();
         setInitialFocus(search);
         refresh();
     }
@@ -118,7 +118,7 @@ public final class TradesScreen extends Screen {
         MemoryBank bank = EntityTrackerClient.banks().bank();
         if (bank != null) {
             List<EntityRecord> traders = bank.traders()
-                    .filter(r -> trashView == r.isTrashed())
+                    .filter(r -> !r.isTrashed())
                     .filter(r -> showWandering || !isWandering(r))
                     .sorted(Comparator.comparingDouble(TrackerScreen::sortDistance))
                     .toList();
@@ -144,12 +144,9 @@ public final class TradesScreen extends Screen {
         return rows;
     }
 
-    /** "Trash (3)" in the list, "<- Back to list" in the trash. */
-    private Component trashLabel() {
-        if (trashView) return Component.translatable("screen.entitytracker.trash_back");
-        MemoryBank bank = EntityTrackerClient.banks().bank();
-        long n = bank == null ? 0 : bank.traders().filter(EntityRecord::isTrashed).count();
-        return Component.translatable("screen.entitytracker.trash_open", n);
+    /** "Trash (3)": everything in the trash, the same count as on the storage screen. */
+    private static Component trashLabel() {
+        return Component.translatable("screen.entitytracker.trash_open", TrackerScreen.totalTrashed());
     }
 
     private static Component wanderingLabel() {
@@ -161,16 +158,14 @@ public final class TradesScreen extends Screen {
         return "minecraft:wandering_trader".equals(r.type);
     }
 
-    /** Row menu: mark destroyed (to the trash, e.g. a wandering trader that left) or restore. */
+    /** Row menu: mark destroyed (to the trash, e.g. a wandering trader that left). Restoring is in the trash. */
     private void openMenu(EntityRecord record, double x, double y) {
         closeMenu();
-        Button.Builder item = Button.builder(record.isTrashed()
-                ? Component.translatable("screen.entitytracker.restore") : TrackerScreen.markLabel(record), b -> {
+        Button.Builder item = Button.builder(TrackerScreen.markLabel(record), b -> {
             closeMenu();
             MemoryBank bank = EntityTrackerClient.banks().bank();
             if (bank == null) return;
-            if (record.isTrashed()) Trash.restore(bank, record);
-            else Trash.trash(bank, record);
+            Trash.trash(bank, record);
             rebuildWidgets(); // also updates the trash count
         });
         menuW = 120;
@@ -226,15 +221,13 @@ public final class TradesScreen extends Screen {
         super.render(context, mouseX, mouseY, delta);
         ScreenTabs.drawUnderline(context, width, true);
         if (fuzzy) TrackerScreen.drawFuzzyNote(context, font, search);
-        context.drawCenteredString(font, trashView
-                ? Component.translatable("screen.entitytracker.hint.trash", Settings.trashDays)
-                : Component.translatable("screen.entitytracker.hint.trades"), width / 2, 48, trashView ? 0xFFE8B04A : 0xFFB0B0B0);
+        context.drawCenteredString(font, Component.translatable("screen.entitytracker.hint.trades"), width / 2, 48, 0xFFB0B0B0);
         if (EntityTrackerClient.banks().bank() == null) {
             context.drawCenteredString(font, Component.translatable(EntityTrackerClient.banks().isLoading()
                     ? "screen.entitytracker.loading" : "screen.entitytracker.no_bank"),
                     width / 2, height / 2, 0xFFAAAAAA);
         } else if (list.children().isEmpty()) {
-            context.drawCenteredString(font, Component.translatable(search.getValue().isBlank() && !trashView
+            context.drawCenteredString(font, Component.translatable(search.getValue().isBlank()
                     ? "screen.entitytracker.trades.none_yet" : "screen.entitytracker.no_results"), width / 2, height / 2, 0xFFAAAAAA);
         }
     }
