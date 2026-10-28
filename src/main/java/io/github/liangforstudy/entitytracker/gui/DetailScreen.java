@@ -24,6 +24,10 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.BookViewScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import org.jetbrains.annotations.Nullable;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.core.NonNullList;
@@ -43,6 +47,8 @@ import net.minecraft.world.item.component.ItemContainerContents;
 public final class DetailScreen extends Screen {
     private static final int SLOT = 18;
     private static final int COLUMNS = 9;
+    /** The animal's picture on a donkey, mule or llama: three slots high, as in the game's own screen. */
+    private static final int PICTURE = 3 * SLOT;
 
     private final ContainerRecord record;
     private final Screen parent;
@@ -154,6 +160,7 @@ public final class DetailScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent input) {
+        input = CloseKey.asEscape(this, minecraft, input);
         if (input.key() == GLFW.GLFW_KEY_ESCAPE && !path.isEmpty()) {
             path.removeLast(); // like a file explorer: Esc goes up one folder first
             selected = -1;
@@ -212,11 +219,79 @@ public final class DetailScreen extends Screen {
         if (my >= viewBottom) return -1; // scrolled under the buttons
         List<ItemStack> slots = current().slots();
         for (int i = 0; i < slots.size(); i++) {
-            int sx = gridX + (i % COLUMNS) * SLOT;
-            int sy = gridY + (i / COLUMNS) * SLOT;
+            if (!shown(i, slots.get(i))) continue;
+            int sx = gridX + slotX(i);
+            int sy = gridY + slotY(i);
             if (mx >= sx && mx < sx + SLOT && my >= sy && my < sy + SLOT) return i;
         }
         return -1;
+    }
+
+    /**
+     * A donkey, mule or llama, not inside a shulker: laid out like the game's own screen, with the
+     * saddle (or a llama's carpet) on the left, a picture of the animal, then the chest. Slots are
+     * saddle, body armour, then the chest, as the game's screen lists them.
+     */
+    private boolean mountLayout() {
+        String type = record.type == null ? "" : record.type;
+        return path.isEmpty() && record instanceof EntityRecord && current().slots().size() > 2
+                && (type.endsWith("donkey") || type.endsWith("mule") || type.endsWith("llama"));
+    }
+
+    private int chestColumns() {
+        return Math.max(1, (current().slots().size() - 2) / 3);
+    }
+
+    /** Llamas wear a carpet and take no saddle; donkeys and mules the other way round. */
+    private boolean shown(int i, ItemStack stack) {
+        if (!mountLayout() || i >= 2 || !stack.isEmpty()) return true;
+        boolean llama = record.type.endsWith("llama");
+        return i == 0 ? !llama : llama;
+    }
+
+    private int slotX(int i) {
+        if (!mountLayout()) return (i % COLUMNS) * SLOT;
+        return i < 2 ? 0 : SLOT + PICTURE + 4 + ((i - 2) % chestColumns()) * SLOT;
+    }
+
+    private int slotY(int i) {
+        if (!mountLayout()) return (i / COLUMNS) * SLOT;
+        return i < 2 ? i * SLOT : ((i - 2) / chestColumns()) * SLOT;
+    }
+
+    private int gridWidth() {
+        if (mountLayout()) return SLOT + PICTURE + 4 + chestColumns() * SLOT;
+        return Math.min(COLUMNS, Math.max(1, current().slots().size())) * SLOT;
+    }
+
+    private int gridHeight() {
+        int size = current().slots().size();
+        if (mountLayout()) {
+            int cols = chestColumns();
+            return Math.max(PICTURE, (size - 2 + cols - 1) / cols * SLOT);
+        }
+        return (size + COLUMNS - 1) / COLUMNS * SLOT;
+    }
+
+    /** The animal itself when it's loaded (it follows the mouse, as in its own screen), else its icon. */
+    private void drawMount(GuiGraphics context, int x, int y, int mouseX, int mouseY) {
+        context.fill(x, y, x + PICTURE, y + PICTURE, 0xFF373737);
+        context.fill(x + 1, y + 1, x + PICTURE - 1, y + PICTURE - 1, 0xFF000000);
+        LivingEntity entity = loadedMount();
+        if (entity != null) {
+            InventoryScreen.renderEntityInInventoryFollowsMouse(context, x + 1, y + 1, x + PICTURE - 1, y + PICTURE - 1,
+                    17, 0.25f, mouseX, mouseY, entity);
+        } else {
+            context.renderItem(TrackerScreen.entityIcon(record.type), x + PICTURE / 2 - 8, y + PICTURE / 2 - 8);
+        }
+    }
+
+    private @Nullable LivingEntity loadedMount() {
+        if (minecraft.level == null || !(record instanceof EntityRecord e)) return null;
+        for (Entity entity : minecraft.level.entitiesForRendering()) {
+            if (entity instanceof LivingEntity living && !entity.isRemoved() && entity.getUUID().equals(e.uuid)) return living;
+        }
+        return null;
     }
 
     /** Darker than the vanilla backdrop, so grey text stays readable over a bright sky. */
@@ -273,14 +348,15 @@ public final class DetailScreen extends Screen {
         y += 12;
 
         List<ItemStack> slots = current().slots();
-        int columns = Math.min(COLUMNS, Math.max(1, slots.size()));
-        gridX = cx - columns * SLOT / 2;
+        gridX = cx - gridWidth() / 2;
         gridY = y;
         int hovered = slotAt(mouseX, mouseY);
+        if (mountLayout()) drawMount(context, gridX + SLOT + 2, gridY, mouseX, mouseY);
         for (int i = 0; i < slots.size(); i++) {
-            int sx = gridX + (i % COLUMNS) * SLOT;
-            int sy = gridY + (i / COLUMNS) * SLOT;
             ItemStack stack = slots.get(i);
+            if (!shown(i, stack)) continue;
+            int sx = gridX + slotX(i);
+            int sy = gridY + slotY(i);
             boolean match = !query.isEmpty() && !stack.isEmpty()
                     && matches.computeIfAbsent(stack, st -> ItemIndex.matchesDeep(st, query, 0));
             context.fill(sx, sy, sx + SLOT, sy + SLOT, match ? 0xFFE8B04A : 0xFF373737); // border
@@ -296,14 +372,14 @@ public final class DetailScreen extends Screen {
         }
         if (!roles.isEmpty()) {
             context.drawCenteredString(font, String.join(" \u00B7 ", roles), cx,
-                    gridY + ((slots.size() + COLUMNS - 1) / COLUMNS) * SLOT + 3, 0xFFAAAAAA);
+                    gridY + gridHeight() + 3, 0xFFAAAAAA);
         }
         if (!record.hasSnapshot()) {
             context.drawCenteredString(font, Component.translatable("screen.entitytracker.never_opened"),
                     cx, gridY + SLOT + 4, 0xFFAAAAAA);
         }
         context.disableScissor();
-        int contentBottom = gridY + ((slots.size() + COLUMNS - 1) / COLUMNS) * SLOT + (roles.isEmpty() ? 0 : 14) + 4;
+        int contentBottom = gridY + gridHeight() + (roles.isEmpty() ? 0 : 14) + 4;
         maxScroll = Math.max(0, contentBottom + scroll - viewBottom);
         if (scroll > maxScroll) scroll = maxScroll; // content got shorter (stepped out of a shulker)
         if (maxScroll > 0) {
@@ -318,7 +394,7 @@ public final class DetailScreen extends Screen {
         } else if (selected >= 0 && selected < slots.size() && !slots.get(selected).isEmpty()) {
             // A tapped (pinned) tooltip stays next to its slot instead of following the mouse.
             context.setTooltipForNextFrame(font, slots.get(selected),
-                    gridX + (selected % COLUMNS) * SLOT + SLOT, gridY + (selected / COLUMNS) * SLOT);
+                    gridX + slotX(selected) + SLOT, gridY + slotY(selected));
         }
     }
 

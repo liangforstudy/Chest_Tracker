@@ -14,6 +14,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
@@ -87,6 +88,11 @@ public final class AreaConfirmScreen extends Screen {
         context.drawCenteredString(font, Component.translatable("screen.entitytracker.area.size",
                 area.maxX() - area.minX() + 1, area.maxY() - area.minY() + 1, area.maxZ() - area.minZ() + 1,
                 area.minX(), area.minY(), area.minZ(), area.maxX(), area.maxY(), area.maxZ()), width / 2, 22, 0xFFAAAAAA);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent input) {
+        return super.keyPressed(CloseKey.asEscape(this, minecraft, input));
     }
 
     @Override

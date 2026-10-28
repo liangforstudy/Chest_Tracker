@@ -205,6 +205,7 @@ public final class TradesScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent input) {
+        input = CloseKey.asEscape(this, minecraft, input);
         if (input.key() == GLFW.GLFW_KEY_ESCAPE && !menu.isEmpty()) {
             closeMenu();
             return true;

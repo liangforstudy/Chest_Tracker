@@ -346,6 +346,7 @@ public final class TrackerScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent input) {
+        input = CloseKey.asEscape(this, minecraft, input);
         if (input.key() == GLFW.GLFW_KEY_ESCAPE) {
             // Esc closes an open menu, then clears the search, and only then closes the screen.
             if (!menu.isEmpty()) {

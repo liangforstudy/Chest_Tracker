@@ -46,7 +46,8 @@ with, searchable in their own screen.
   so the sword you're looking for doesn't hide in your inventory.
 - **Detail view.** Click any result to see the container's last known contents as an inventory
   grid, with the matching items outlined. Tap a shulker or bundle to look inside it, or a book to
-  read it. Copy the
+  read it. Donkeys, mules and llamas are laid out like their own screen: saddle (or carpet), a
+  picture of the animal, then the chest. Copy the
   coordinates as `x y z`, or as `x z` for Baritone goals.
 - **Across dimensions.** A Nether stash seen from the overworld shows where it lines up
   (`Nether (30, 99, 25) ≈ 244, 204 here`), and results are sorted by that distance. The scale comes
@@ -107,7 +108,8 @@ with, searchable in their own screen.
 - Press **K** (rebindable in Controls), the **ET** button in your inventory, or type `/etracker` to
   open the tracker. Type to search, click a result for its detail view, right-click a row (or tap
   its **⋮**) for actions. The detail view scrolls (mouse wheel, or drag) when it doesn't fit, for
-  example a double chest at a large GUI scale.
+  example a double chest at a large GUI scale. The inventory key (**E**, or whatever you bound it
+  to) works like Esc on the tracker's screens, except while you're typing in the search box.
 - **Storage | Trades** tabs at the top switch between the two screens; `/offers [text]` (or `/etracker trades`), or bind
   **Open trades** in Controls: the villager trades you've seen, e.g. `/offers mending`.
 - `/search <text>`: search from chat, nearest first.

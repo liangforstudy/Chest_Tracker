@@ -16,6 +16,7 @@ import net.minecraft.client.gui.components.ContainerObjectSelectionList;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -123,6 +124,11 @@ public final class TradeDetailScreen extends Screen {
             context.drawCenteredString(font, header.get(i), width / 2, 22 + i * 11, headerColors.get(i));
         }
         if (hoveredStack != null) context.setTooltipForNextFrame(font, hoveredStack, mouseX, mouseY);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent input) {
+        return super.keyPressed(CloseKey.asEscape(this, minecraft, input));
     }
 
     @Override
