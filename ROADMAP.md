@@ -19,12 +19,14 @@ as they get built, and get added or removed as plans change. For what works toda
 - One memory per server shared by all your accounts, server address aliases, safe saving with
   backups
 - Search: names, lore, enchantments, player heads and textures (with aliases), items nested in
-  shulkers and bundles, your own inventory ("On me")
+  shulkers and bundles, your own inventory ("On <your name>")
 - Tracker screen, detail view with contents grid, coordinates converted between dimensions
 - Detection: missing, likely destroyed, went through a portal, chest removed, container changed,
   hints for containers whose contents change on their own, "last checked" in play days, and an
   explanation for every warning
-- Trash with restore and undo, area and multi-select actions
+- Trash with restore and undo, area and multi-select actions; broken block containers go to the
+  trash by themselves (restorable, and back if the container returns); one trash with entity, trade
+  and block views
 - Safe binding on laggy servers; touch-friendly (PojavLauncher)
 - Villager and wandering trader offers in their own Trades screen: prices and stock as last seen,
   changes since your previous look, per-account prices, level-up and profession warnings

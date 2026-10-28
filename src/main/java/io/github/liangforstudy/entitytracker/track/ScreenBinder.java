@@ -27,6 +27,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.AbstractMountInventoryMenu;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.MerchantMenu;
+import net.minecraft.world.inventory.ResultContainer;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.ChestBlock;
@@ -257,8 +258,13 @@ public final class ScreenBinder {
 
     private static int containerSlotCount(AbstractContainerMenu handler) {
         int count = 0;
-        for (Slot slot : handler.slots) if (!(slot.container instanceof Inventory)) count++;
+        for (Slot slot : handler.slots) if (isStored(slot)) count++;
         return count;
+    }
+
+    /** A slot of the container itself: not the player's inventory, and not a computed result (the crafter's output). */
+    private static boolean isStored(Slot slot) {
+        return !(slot.container instanceof Inventory) && !(slot.container instanceof ResultContainer);
     }
 
     private void snapshot(Minecraft client, Bound bound) {
@@ -270,7 +276,7 @@ public final class ScreenBinder {
         List<ContainerRecord.SlotItem> items = new ArrayList<>();
         int containerSlots = 0;
         for (Slot slot : bound.handler.slots) {
-            if (slot.container instanceof Inventory) continue;
+            if (!isStored(slot)) continue;
             int index = containerSlots++;
             ItemStack stack = slot.getItem();
             if (stack.isEmpty()) continue;

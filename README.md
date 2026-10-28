@@ -42,7 +42,7 @@ with, searchable in their own screen.
   (`Donkey "Pack" > Shulker "Tools" > Diamond Pickaxe`). Typos are forgiven: when nothing matches
   exactly, close matches are shown and marked as such ("dimond" finds diamonds). Results appear
   as they're found, nearest first, so on a big base the closest ones show up straight away.
-- **"On me".** Your own inventory (and the shulkers and bundles in it) is searched too, listed first,
+- **"On <your name>".** Your own inventory (and the shulkers and bundles in it) is searched too, listed first,
   so the sword you're looking for doesn't hide in your inventory.
 - **Detail view.** Click any result to see the container's last known contents as an inventory
   grid, with the matching items outlined. Tap a shulker or bundle to look inside it, or a book to
@@ -52,12 +52,14 @@ with, searchable in their own screen.
   (`Nether (30, 99, 25) ≈ 244, 204 here`), and results are sorted by that distance. The scale comes
   from each dimension's own settings, so modded dimensions work too; the End isn't converted.
 - **Honest about what it knows.** The client can't see what happens to a container while you're
-  away, so the mod tells you what it noticed and leaves the decision to you. Nothing is hidden or
-  deleted automatically:
+  away, so the mod tells you what it noticed and leaves the decision to you:
+  - **destroyed** (or **picked up** for a shulker box): a block container that's gone is certain
+    once its chunk is loaded, so it moves to the trash by itself and drops out of search. It can be
+    restored from there for 7 days, and comes back on its own if the container turns up again;
   - **missing:** you're close to where an entity should be, and it isn't there;
-  - **likely died** (animals and villagers) or **likely destroyed** (minecarts, boats, blocks): it
-    was seen dying, or vanished next to you and its own items dropped on the spot. A shulker box
-    that's gone is **likely picked up**, since it keeps its contents when broken;
+  - **likely died** (animals and villagers) or **likely destroyed** (minecarts, boats): it was
+    seen dying, or vanished next to you and its own items dropped on the spot. Entities are never
+    hidden or deleted automatically;
   - **went through a portal**, **chest removed** (a donkey seen without its chest), **container
     changed** (another kind of container now stands where it was);
   - hints that contents may change on their own: a hopper below or feeding it, furnaces and
@@ -80,7 +82,8 @@ with, searchable in their own screen.
   traders can be hidden all at once, or put in the trash one by one when they've moved on.
 - **Trash for the cases it can't judge.** Mark single entries, a selection (Ctrl/Shift-click, or
   the **Select** button on touch screens) or a whole area destroyed (after a grief, say), with
-  restore and undo. The **Trash (N)** button shows what's in it.
+  restore and undo. **Trash (N)** opens one trash with three views, **Entities**, **Trades** and
+  **Blocks**, so broken blocks don't bury the entities and traders you trashed.
 - **Safe storage.** Memory is saved per server under `<game dir>/entity-tracker/`, outside
   `config/`, with atomic writes and daily backups. Loading, saving and building the search index
   happen in the background, so even a huge base never freezes the game. Several addresses can share

@@ -242,11 +242,19 @@ public final class PositionTracker {
             RecordStatus next = present ? RecordStatus.LOADED : RecordStatus.LIKELY_DESTROYED;
             if (present) record.lastSeen = now;
             if (record.status != next) {
-                if (next == RecordStatus.LIKELY_DESTROYED) {
-                    EntityTrackerClient.LOGGER.info("{} at {} is gone", record.type, pos.toShortString());
-                }
                 record.status = next;
                 bank.markDirty();
+            }
+            // Unlike an entity, a block in a loaded chunk is certainly gone: trash it (restorable), and
+            // bring it back if the mod trashed it and the container is there again.
+            if (!present && !record.isTrashed()) Trash.trashGoneBlock(bank, record);
+            else if (present && record.isTrashed() && record.autoTrashed) {
+                // A container placed where the old one broke: the old contents dropped, so start as never opened.
+                Trash.restore(bank, record);
+                record.items.clear();
+                record.slotCount = 0;
+                record.lastOpened = 0;
+                record.flags.clear();
             }
         }
     }
@@ -301,7 +309,8 @@ public final class PositionTracker {
     /** F (chest removed) and G (hints) for a loaded entity. Returns true if anything changed. */
     private static boolean checkEntityNotes(EntityRecord record, Entity entity, ClientLevel world) {
         boolean changed = record.flags.remove(Notes.WENT_THROUGH_PORTAL); // it's back
-        if (entity instanceof AbstractChestedHorse donkey && !donkey.hasChest() && record.hasSnapshot()) {
+        // A dying animal drops its chest during the death animation: that's a death, not a removed chest.
+        if (entity instanceof AbstractChestedHorse donkey && !donkey.hasChest() && !donkey.isDeadOrDying() && record.hasSnapshot()) {
             changed |= record.flags.add(Notes.CHEST_REMOVED); // its contents dropped when the chest came off
         }
         Set<String> hints = new LinkedHashSet<>();

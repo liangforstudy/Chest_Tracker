@@ -153,7 +153,7 @@ changed between 1.21.11 and 26.2, so old items may fail to parse and show as emp
 
 **Search and detection**
 
-15. Fuzzy search ("dimond"), enchantments, lore, head names, book text, "On me",
+15. Fuzzy search ("dimond"), enchantments, lore, head names, book text, "On <player>",
     Nether/Overworld coordinate conversion.
 16. Kill a donkey, take one through a portal, remove a donkey's chest, break a chest; hopper
     hints; last-checked days.
@@ -167,6 +167,40 @@ changed between 1.21.11 and 26.2, so old items may fail to parse and show as emp
 
 18. With ShulkerBoxTooltip and Mod Menu: no crashes, no clash on the inventory button.
 19. On a laggy server: screens still bind to the right container.
+
+### Results so far (Paper 26.2 build 135, 26.2 dev client through MCPFabric)
+
+Server: a copy of the 1.21.11 Paper test world, so the existing bank lined up with it.
+
+- 1-2: no mixin errors; `/etracker`, `/offers` and the screens open.
+- 3: the 1.21.11 bank (76 records) loaded: nested shulker/bundle items, custom names, player
+  heads, enchanted books and written books all found by search.
+- 5-6: mule and llama (sneak-click), chest minecart and hopper minecart (click) recorded with
+  the right contents.
+- 7: item frame rotate (no change), take out (item dropped from the record), put in (recorded);
+  armor stand helmet swap by right-click recorded.
+- 9: single, double (one record, both halves), trapped and copper chests, barrel, hopper, blast
+  furnace, smoker, dispenser, dropper, crafter, brewing stand, shulker box, ender chest. The
+  crafter was never recorded on either version (its screen has a 10th slot, the result);
+  fixed by not counting result slots.
+- 10: shelf, decorated pot (hand insert counted through the wobble), jukebox (hand-placed disc
+  remembered, server-filled one gets "holds something not seen yet"), lectern (hand-placed book
+  found by page text; server-placed one remembered on opening), chiseled bookshelf.
+- 11, 13: tracker and Trades lists render (icons, statuses, hints, trade arrows, out of stock).
+- 16: killed mule "likely died", llama chest removed "chest removed", destroyed minecart
+  "likely destroyed". A killed animal also got "chest removed" (it drops its chest during the
+  death animation); fixed by ignoring dying animals.
+
+- Gone block containers now go to the trash by themselves (user's decision): on joining, the
+  pots, shulker box and chest removed in earlier tests were trashed; a pot broken by hand was
+  trashed and left search; putting a pot back at that spot restored the record as never opened.
+  Gone blocks show "destroyed" ("picked up" for a shulker box). One Trash button opens a trash
+  with Entities, Trades and Blocks views; the Trades screen's Trash button opens it on Trades.
+
+Still to do: 4 (the way back to 1.21.11, needs step 4), 8 (trading and level-up), 12 (detail
+view, book reader: needs hand tapping), 14 (GUI scales, resize, Vulkan: by hand), 15 (fuzzy
+search in the screen, dimension conversion), 17, 18 (inventory button with Mod Menu), 19 (lag
+proxy), mounted inventory key (by hand).
 
 ## Order of work
 

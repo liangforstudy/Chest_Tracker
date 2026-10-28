@@ -8,7 +8,7 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * "On me": the player's own inventory (armour and offhand included), built fresh for each search
+ * "On <player>": the player's own inventory (armour and offhand included), built fresh for each search
  * so carried items, and shulkers and bundles in the inventory, are found too. Never stored.
  */
 public final class InventoryRecord extends ContainerRecord {
@@ -27,6 +27,7 @@ public final class InventoryRecord extends ContainerRecord {
         var ops = client.level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
         InventoryRecord r = new InventoryRecord();
         r.type = "minecraft:player_head"; // for the icon
+        r.name = client.player.getName().getString(); // shown as "On <name>"
         r.dimension = client.level.dimension().identifier().toString();
         r.x = client.player.getX();
         r.y = client.player.getY();

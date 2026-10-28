@@ -65,8 +65,18 @@ public final class Trash {
         EntityTrackerClient.LOGGER.info("Marked {} destroyed (in trash)", record.key());
     }
 
+    /** A block that is certainly gone (its chunk is loaded and the container isn't there): trash it, restorable. */
+    public static void trashGoneBlock(MemoryBank bank, BlockRecord record) {
+        record.trashedAt = System.currentTimeMillis();
+        record.autoTrashed = true;
+        record.hints.clear(); // "fed by a hopper", "not seen yet": about a block that isn't there any more
+        bank.markDirty();
+        EntityTrackerClient.LOGGER.info("{} at {} is gone; moved it to the trash", record.type, record.pos.toShortString());
+    }
+
     public static void restore(MemoryBank bank, ContainerRecord record) {
         record.trashedAt = 0;
+        record.autoTrashed = false;
         bank.markDirty();
         EntityTrackerClient.LOGGER.info("Restored {} from trash", record.key());
     }

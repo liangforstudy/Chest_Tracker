@@ -28,6 +28,8 @@ public abstract class ContainerRecord {
     public List<SlotItem> items = new ArrayList<>();
     /** When the player marked it destroyed (moved to the trash); 0 = not in the trash. */
     public long trashedAt;
+    /** Trashed by the mod because the block was gone, not by the player: restored if it's back. */
+    public boolean autoTrashed;
     /** Warning flags (see {@link Notes}); cleared by a fresh snapshot. */
     public Set<String> flags = new LinkedHashSet<>();
     /** Hints that the contents may change on their own (see {@link Notes}). */
@@ -70,6 +72,7 @@ public abstract class ContainerRecord {
         }
         o.add("items", arr);
         if (trashedAt != 0) o.addProperty("trashedAt", trashedAt);
+        if (autoTrashed) o.addProperty("autoTrashed", true);
         if (!flags.isEmpty()) o.add("flags", toArray(flags));
         if (!hints.isEmpty()) o.add("hints", toArray(hints));
     }
@@ -110,6 +113,7 @@ public abstract class ContainerRecord {
             }
         }
         trashedAt = o.has("trashedAt") ? o.get("trashedAt").getAsLong() : 0;
+        autoTrashed = o.has("autoTrashed") && o.get("autoTrashed").getAsBoolean();
         readSet(o, "flags", flags);
         readSet(o, "hints", hints);
     }
