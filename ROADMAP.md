@@ -28,6 +28,7 @@ as they get built, and get added or removed as plans change. For what works toda
   trash by themselves (restorable, and back if the container returns); one trash with entity, trade
   and block views
 - Safe binding on laggy servers; touch-friendly (PojavLauncher)
+- Builds for Minecraft 1.21.11 and 26.2
 - Villager and wandering trader offers in their own Trades screen: prices and stock as last seen,
   changes since your previous look, per-account prices, level-up and profession warnings
 - Chest Tracker importer: `/etracker import` brings Chest Tracker 2.x memory banks over (read-only,
@@ -46,6 +47,12 @@ as they get built, and get added or removed as plans change. For what works toda
 - Named groups of containers ("Base 1", "Base 2") with per-group totals
 - Settings screen (via Mod Menu)
 - Testing on servers that use ViaVersion, and on a real modpack instance
+- **Servers with anti-xray.** Many servers hide buried blocks from the client, chests included
+  (Paper's anti-xray does when it's turned on): until you come close, a buried chest arrives as
+  stone. Today the mod takes that as the chest being gone, moves it to the trash, and when the
+  chest shows up again restores it as never opened, so its remembered contents are lost until you
+  open it again. The plan: only trash a block you saw break while it was loaded; a container
+  already missing when its area loads gets a warning instead, and keeps its contents
 
 ## Ideas (not decided)
 
