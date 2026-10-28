@@ -2,7 +2,7 @@
 mod.id = "entitytracker"
 mod.name = "Entity Container Tracker"
 mod.group = "io.github.liangforstudy"
-mod.version = "0.1.0"
+mod.version = "0.2.0"
 
 deps.fabric_loader = "0.19.5"
 
