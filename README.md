@@ -86,10 +86,14 @@ with, searchable in their own screen.
   restore and undo. **Trash (N)** opens one trash with three views, **Entities**, **Trades** and
   **Blocks**, so broken blocks don't bury the entities and traders you trashed.
 - **Safe storage.** Memory is saved per server under `<game dir>/entity-tracker/`, outside
-  `config/`, with atomic writes and daily backups. Loading, saving and building the search index
+  `config/`, with atomic writes and daily backups. The file is small: each distinct item stack is
+  saved once however many copies you have (a real 9b9t memory went from 9.6 MB to 0.9 MB), while
+  search still lists every copy. A file saved by a newer version of the mod is never written over
+  by an older one. Loading, saving and building the search index
   happen in the background, so even a huge base never freezes the game. Several addresses can share
-  one memory (`server-aliases.json`); by default `9b9t.com`, `9b9t.org` and `2b2t.com` (which
-  redirects to 9b9t) do. `2b2t.org`, the real 2b2t, stays separate.
+  one memory (`server-aliases.json`); by default `9b9t.com`, `9b9t.org`, `minecraft.9b9t.org` (what
+  a launcher's quick-join may connect with) and `2b2t.com` (which redirects to 9b9t) do. `2b2t.org`,
+  the real 2b2t, stays separate.
 - **Works across Minecraft versions.** Every remembered item notes which game version saved it.
   Moving up (1.21.11 to 26.2), older items are upgraded the way the game upgrades worlds. Opening
   the memory in an older version by accident leaves the newer items exactly as they are (shown by

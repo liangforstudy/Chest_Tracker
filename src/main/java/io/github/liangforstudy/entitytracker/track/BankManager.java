@@ -15,6 +15,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.network.chat.Component;
 
@@ -36,6 +37,8 @@ public final class BankManager {
     });
     private @Nullable Future<BankStorage.LoadResult> loading;
     private @Nullable String loadingAddress;
+    /** The connection the bank was opened for. */
+    private @Nullable ClientPacketListener connection;
     private @Nullable Future<?> lastWrite;
     private @Nullable String pendingWarning;
     private long ticks;
@@ -53,6 +56,10 @@ public final class BankManager {
     }
 
     public void tick(Minecraft client) {
+        // The bank belongs to one connection. If the disconnect event was missed (seen when leaving
+        // one server and joining another), a new or missing connection still closes it, so the
+        // next server never gets the previous server's bank.
+        if ((bank != null || loading != null) && client.getConnection() != connection) close();
         if (bank == null && loading == null && client.player != null && client.level != null) startLoading(client);
         if (loading != null && loading.isDone() && client.player != null) open(client);
         if (bank != null && ++ticks % 1200 == 0) bank.markPlayedToday(); // also catches playing past midnight
@@ -69,6 +76,7 @@ public final class BankManager {
     }
 
     private void startLoading(Minecraft client) {
+        connection = client.getConnection();
         loadingAddress = serverName(client);
         String server = storage.resolveServer(loadingAddress);
         loading = io.submit(() -> storage.load(server));
@@ -135,6 +143,7 @@ public final class BankManager {
         if (loading != null) loading.cancel(false);
         loading = null;
         bank = null;
+        connection = null;
         pendingWarning = null;
     }
 

@@ -26,7 +26,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -38,9 +40,24 @@ import java.util.stream.Stream;
  */
 public final class BankStorage {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
-    private static final int FORMAT_VERSION = 1;
+    /** Bank files are written compact: pretty printing tripled their size. */
+    private static final Gson COMPACT = new GsonBuilder().disableHtmlEscaping().create();
+    /**
+     * 1: every stack written out in full. 2: each distinct stack once, in a table ({@link StackStore}).
+     * A file from a newer format than this is never written over (see {@link #load}).
+     */
+    private static final int FORMAT_VERSION = 2;
 
     private final Path root;
+    /**
+     * 9b9t addresses added to the defaults after the first release. 2b2t.com redirects to 9b9t (the
+     * real 2b2t is 2b2t.org, which stays separate); minecraft.9b9t.org is where 9b9t.org points,
+     * and what a launcher's quick-join can connect with.
+     */
+    private static final List<String> LATER_9B9T = List.of("2b2t.com", "minecraft.9b9t.org");
+
+    /** Banks whose file is from a newer version of the mod: opened empty, never saved. */
+    private final Set<String> readOnly = ConcurrentHashMap.newKeySet();
 
     public BankStorage(Path gameDir) {
         this.root = gameDir.resolve("entity-tracker");
@@ -104,8 +121,7 @@ public final class BankStorage {
                 JsonArray nineB = new JsonArray();
                 nineB.add("9b9t.com");
                 nineB.add("9b9t.org");
-                // 2b2t.com redirects to 9b9t (the real 2b2t is 2b2t.org, which stays separate).
-                nineB.add("2b2t.com");
+                for (String later : LATER_9B9T) nineB.add(later);
                 defaults.add("9b9t", nineB);
                 Files.writeString(file, GSON.toJson(defaults), StandardCharsets.UTF_8);
                 return defaults;
@@ -114,12 +130,17 @@ public final class BankStorage {
             try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
                 aliases = JsonParser.parseReader(reader).getAsJsonObject();
             }
-            // Files written before 2b2t.com was a default: add it to the 9b9t group once, unless
-            // the player already put it somewhere else.
-            if (aliases.get("9b9t") instanceof JsonArray nineB && !mentions(aliases, "2b2t.com")) {
-                nineB.add("2b2t.com");
-                Files.writeString(file, GSON.toJson(aliases), StandardCharsets.UTF_8);
-                EntityTrackerClient.LOGGER.info("Added 2b2t.com to the 9b9t group in {}", file);
+            // Files written before an address was a default: add it to the 9b9t group, unless the
+            // player already put it somewhere else.
+            if (aliases.get("9b9t") instanceof JsonArray nineB) {
+                boolean changed = false;
+                for (String later : LATER_9B9T) {
+                    if (mentions(aliases, later)) continue;
+                    nineB.add(later);
+                    changed = true;
+                    EntityTrackerClient.LOGGER.info("Added {} to the 9b9t group in {}", later, file);
+                }
+                if (changed) Files.writeString(file, GSON.toJson(aliases), StandardCharsets.UTF_8);
             }
             return aliases;
         } catch (Exception e) {
@@ -145,9 +166,23 @@ public final class BankStorage {
     public LoadResult load(String server) {
         String key = keyFor(server);
         Path file = bankFile(key);
+        readOnly.remove(key);
         if (!Files.exists(file)) return mergeLegacy(key, server);
         try {
-            MemoryBank bank = read(file, key, server, null);
+            JsonObject json = parse(file);
+            int format = json.has("formatVersion") ? json.get("formatVersion").getAsInt() : 1;
+            if (format > FORMAT_VERSION) {
+                // Written by a newer version of this mod: this one can't read it right, and saving
+                // would throw away what it doesn't understand. Leave the file alone.
+                readOnly.add(key);
+                EntityTrackerClient.LOGGER.warn("Bank {} is format {}, this version reads up to {}; not reading or saving it",
+                        file, format, FORMAT_VERSION);
+                return new LoadResult(new MemoryBank(key, server), "file from a newer Entity Tracker, left untouched",
+                        "Entity Tracker: this server's memory was saved by a newer version of the mod. It was left"
+                                + " untouched, and nothing will be remembered until you update Entity Tracker.");
+            }
+            MemoryBank bank = read(json, key, server, null);
+            if (format < FORMAT_VERSION) keepOldFormat(key, file, format, bank);
             return new LoadResult(bank, "loaded existing file", checkVersions(bank, key, file));
         } catch (Exception e) {
             EntityTrackerClient.LOGGER.error("Bank file {} is unreadable", file, e);
@@ -160,7 +195,7 @@ public final class BankStorage {
             }
             for (Path backup : backupsNewestFirst(key)) {
                 try {
-                    MemoryBank bank = read(backup, key, server, null);
+                    MemoryBank bank = read(parse(backup), key, server, null);
                     checkVersions(bank, key, backup);
                     bank.markDirty(); // write the restored data back as the live file
                     return new LoadResult(bank, "restored from backup " + backup.getFileName(),
@@ -191,7 +226,7 @@ public final class BankStorage {
                     Matcher m = legacyName.matcher(p.getFileName().toString());
                     if (!m.matches()) continue;
                     try {
-                        MemoryBank old = read(p, key, server, UUID.fromString(m.group(1)));
+                        MemoryBank old = read(parse(p), key, server, UUID.fromString(m.group(1)));
                         for (EntityRecord r : old.all()) merged.mergeEntity(r);
                         for (BlockRecord r : old.allBlocks()) merged.mergeBlock(r);
                         old.accounts.forEach(merged.accounts::putIfAbsent);
@@ -248,13 +283,37 @@ public final class BankStorage {
                 + " containers again. A copy of the file was saved in backups/" + key + "/from-newer-versions.";
     }
 
-    /** {@code legacyOwner}: the account of an old per-account file, for its ownerless ender chest. */
-    private static MemoryBank read(Path file, String key, String server, @Nullable UUID legacyOwner) throws IOException {
-        JsonObject root;
-        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            root = JsonParser.parseReader(reader).getAsJsonObject();
+    /**
+     * A file in an older format is kept as it was, once (older versions of the mod can read only
+     * that copy), and the bank is saved again in the new format.
+     */
+    private void keepOldFormat(String key, Path file, int format, MemoryBank bank) {
+        Path copy = backupDir(key).resolve("before-format-" + FORMAT_VERSION + ".json");
+        try {
+            if (!Files.exists(copy)) {
+                Files.createDirectories(copy.getParent());
+                Files.copy(file, copy);
+            }
+            bank.markDirty();
+            EntityTrackerClient.LOGGER.info("Bank {} is format {}; kept a copy at {} and saving it as format {}",
+                    key, format, copy, FORMAT_VERSION);
+        } catch (IOException e) {
+            // Without the copy, leave the file in its old format rather than risk the only one.
+            EntityTrackerClient.LOGGER.error("Could not copy {} to {}; keeping the old format for now", file, copy, e);
         }
+    }
+
+    private static JsonObject parse(Path file) throws IOException {
+        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            return JsonParser.parseReader(reader).getAsJsonObject();
+        }
+    }
+
+    /** {@code legacyOwner}: the account of an old per-account file, for its ownerless ender chest. */
+    private static MemoryBank read(JsonObject root, String key, String server, @Nullable UUID legacyOwner) {
+        // Books first: their table is referred to from inside the stacks table, each entry once.
         BookStore.unpack(root);
+        StackStore.unpack(root);
         MemoryBank bank = new MemoryBank(key, server);
         if (root.has("accounts")) {
             for (Map.Entry<String, JsonElement> e : root.getAsJsonObject("accounts").entrySet()) {
@@ -325,13 +384,17 @@ public final class BankStorage {
     /** Writes a snapshot (backup, temp file, atomic rename). Safe off the game thread. */
     public boolean write(String key, JsonObject root, int size) {
         Path file = bankFile(key);
+        if (readOnly.contains(key)) {
+            EntityTrackerClient.LOGGER.warn("Not saving bank {}: its file is from a newer Entity Tracker", key);
+            return true; // not a failure to retry
+        }
         try {
             Files.createDirectories(file.getParent());
             backupIfNeeded(key, file);
             Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
             try (Writer writer = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
-                // Here, off the game thread: walking every item for books is the slow part.
-                GSON.toJson(BookStore.pack(root), writer);
+                // Here, off the game thread: walking every item for books and stacks is the slow part.
+                COMPACT.toJson(StackStore.pack(BookStore.pack(root)), writer);
             }
             try {
                 Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);

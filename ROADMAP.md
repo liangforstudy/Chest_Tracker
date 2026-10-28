@@ -31,6 +31,8 @@ as they get built, and get added or removed as plans change. For what works toda
 - Builds for Minecraft 1.21.11 and 26.2, with one memory file that works in both (older items are
   upgraded; newer ones are kept untouched by an older version, with a backup and a warning)
 - Click-to-screen wait that follows the server's lag
+- Compact memory files: each distinct item stack saved once (about ten times smaller on a real
+  storage base), and older versions of the mod never overwrite a newer file
 - Villager and wandering trader offers in their own Trades screen: prices and stock as last seen,
   changes since your previous look, per-account prices, level-up and profession warnings
 - Chest Tracker importer: `/etracker import` brings Chest Tracker 2.x memory banks over (read-only,
