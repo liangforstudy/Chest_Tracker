@@ -5,6 +5,7 @@ import com.mojang.serialization.JsonOps;
 import io.github.liangforstudy.entitytracker.EntityTrackerClient;
 import io.github.liangforstudy.entitytracker.Settings;
 import io.github.liangforstudy.entitytracker.data.EntityRecord;
+import io.github.liangforstudy.entitytracker.data.ItemData;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.data.TradeData;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -82,7 +83,9 @@ public final class TradeBinder {
             positions.update(record, merchant, world, true);
             readVillager(record.trades, merchant);
             TradeData.Snapshot old = record.trades.byAccount.get(bank.currentPlayer);
-            Bound bound = new Bound(handler, record, bank.currentPlayer, old == null ? null : old.offers);
+            // Offers saved by a newer version can't be compared (or stored next to this version's): no change marks then.
+            boolean comparable = old != null && old.dataVersion == ItemData.CURRENT;
+            Bound bound = new Bound(handler, record, bank.currentPlayer, comparable ? old.offers : null);
             current = bound;
             bank.markDirty();
             ScreenEvents.remove(screen).register(closed -> {
@@ -108,7 +111,7 @@ public final class TradeBinder {
     private @Nullable Entity find(ClientLevel world, Component title) {
         InteractionTracker.Pending only = null;
         int candidates = 0;
-        for (InteractionTracker.Pending p : interactions.fresh(Settings.bindTimeoutTicks)) {
+        for (InteractionTracker.Pending p : interactions.fresh()) {
             if (!p.isEntity()) continue;
             Entity entity = world.getEntity(p.networkId());
             if (!(entity instanceof AbstractVillager) || entity.isRemoved() || !entity.getUUID().equals(p.uuid())) continue;

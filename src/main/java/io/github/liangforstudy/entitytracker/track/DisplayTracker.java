@@ -1,5 +1,6 @@
 package io.github.liangforstudy.entitytracker.track;
 
+import io.github.liangforstudy.entitytracker.data.ItemData;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 import io.github.liangforstudy.entitytracker.EntityTrackerClient;
@@ -325,7 +326,7 @@ public final class DisplayTracker {
 
     private static ItemStack decode(ClientLevel world, JsonElement json) {
         var ops = world.registryAccess().createSerializationContext(JsonOps.INSTANCE);
-        return ItemStack.CODEC.parse(ops, json).result().orElse(ItemStack.EMPTY);
+        return ItemData.decode(ops, json);
     }
 
     private void readEntity(MemoryBank bank, EntityRecord record, Entity entity, ClientLevel world) {

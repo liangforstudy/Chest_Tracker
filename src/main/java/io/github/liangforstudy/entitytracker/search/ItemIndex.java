@@ -1,5 +1,6 @@
 package io.github.liangforstudy.entitytracker.search;
 
+import io.github.liangforstudy.entitytracker.data.ItemData;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 import io.github.liangforstudy.entitytracker.EntityTrackerClient;
@@ -137,7 +138,8 @@ public final class ItemIndex {
         var ops = client.level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
         Item.TooltipContext context = Item.TooltipContext.of(client.level);
         // Items that no longer decode (e.g. from a removed mod) are skipped here but stay on disk.
-        ItemStack.CODEC.parse(ops, json).result().ifPresent(stack -> add(out, stack, -1, List.of(), context, client, 0));
+        ItemStack decoded = ItemData.decode(ops, json);
+        if (!decoded.isEmpty()) add(out, decoded, -1, List.of(), context, client, 0);
         return out;
     }
 

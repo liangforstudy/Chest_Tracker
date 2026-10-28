@@ -147,7 +147,8 @@ public final class BankStorage {
         Path file = bankFile(key);
         if (!Files.exists(file)) return mergeLegacy(key, server);
         try {
-            return new LoadResult(read(file, key, server, null), "loaded existing file", null);
+            MemoryBank bank = read(file, key, server, null);
+            return new LoadResult(bank, "loaded existing file", checkVersions(bank, key, file));
         } catch (Exception e) {
             EntityTrackerClient.LOGGER.error("Bank file {} is unreadable", file, e);
             Path corrupt = file.resolveSibling(key + ".json.corrupt-"
@@ -160,6 +161,7 @@ public final class BankStorage {
             for (Path backup : backupsNewestFirst(key)) {
                 try {
                     MemoryBank bank = read(backup, key, server, null);
+                    checkVersions(bank, key, backup);
                     bank.markDirty(); // write the restored data back as the live file
                     return new LoadResult(bank, "restored from backup " + backup.getFileName(),
                             "Entity Tracker: bank file was unreadable, restored backup " + backup.getFileName()
@@ -204,8 +206,46 @@ public final class BankStorage {
             }
         }
         if (used.isEmpty()) return new LoadResult(merged, "new bank (no file yet)", null);
+        checkVersions(merged, key, null);
         merged.markDirty();
         return new LoadResult(merged, "merged old per-account banks " + used + " (old files kept)", null);
+    }
+
+    /**
+     * Upgrades items saved by an older Minecraft version (see {@link ItemData}) and, when the file
+     * holds items from a newer version (the bank was used by a newer game, and this is an older
+     * one), keeps a copy of the file and returns a warning. The newer items are left exactly as
+     * they are; only reopening a container replaces them with this version's.
+     */
+    private @Nullable String checkVersions(MemoryBank bank, String key, @Nullable Path file) {
+        int upgraded = 0;
+        long newer = 0;
+        for (ContainerRecord r : bank.allRecords().toList()) {
+            upgraded += r.upgradeItems();
+            newer += r.newerItems();
+            if (r instanceof EntityRecord e && e.trades != null) {
+                upgraded += e.trades.upgradeItems();
+                newer += e.trades.newerSnapshots();
+            }
+        }
+        if (upgraded > 0) {
+            EntityTrackerClient.LOGGER.info("Upgraded {} items saved by an older Minecraft version in bank {}", upgraded, key);
+            bank.markDirty();
+        }
+        if (newer == 0 || file == null) return null;
+        Path copy = backupDir(key).resolve("from-newer-versions")
+                .resolve(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".json");
+        try {
+            Files.createDirectories(copy.getParent());
+            Files.copy(file, copy);
+        } catch (IOException e) {
+            EntityTrackerClient.LOGGER.error("Could not copy {} to {}", file, copy, e);
+        }
+        EntityTrackerClient.LOGGER.warn("Bank {} has {} items from a newer Minecraft version (this is data version {}); kept as they are, copy at {}",
+                key, newer, ItemData.CURRENT, copy);
+        return "Entity Tracker: this memory was last used by a newer Minecraft version. " + newer
+                + " remembered items from it are kept unchanged and shown by type only until you open those"
+                + " containers again. A copy of the file was saved in backups/" + key + "/from-newer-versions.";
     }
 
     /** {@code legacyOwner}: the account of an old per-account file, for its ownerless ender chest. */
@@ -261,6 +301,8 @@ public final class BankStorage {
     public JsonObject snapshot(MemoryBank bank) {
         JsonObject root = new JsonObject();
         root.addProperty("formatVersion", FORMAT_VERSION);
+        // The game version that last saved the file; each record and item also says which wrote it.
+        root.addProperty("dataVersion", ItemData.CURRENT);
         root.addProperty("server", bank.server);
         JsonObject accounts = new JsonObject();
         bank.accounts.forEach((uuid, name) -> accounts.addProperty(uuid.toString(), name));

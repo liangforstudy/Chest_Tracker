@@ -10,6 +10,8 @@ public final class Settings {
      * also requires the slot count to match the entity's inventory, which keeps it safe.
      */
     public static int bindTimeoutTicks = 60;
+    /** The longest a click waits for its screen when the server is very laggy (see InteractionTracker#windowTicks). */
+    public static int bindTimeoutMaxTicks = 400;
     /** Home area radius in chunks (1 = the 3x3 area around homeChunk). */
     public static int homeRadiusChunks = 1;
     /** An entity vanishing closer than this, followed by item drops, counts as likely destroyed. */

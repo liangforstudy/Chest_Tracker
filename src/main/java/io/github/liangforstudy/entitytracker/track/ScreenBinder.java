@@ -134,7 +134,7 @@ public final class ScreenBinder {
         // Generic screens don't say whose they are. Match recent clicks in order (the server
         // answers them in order); an entity must also match the screen title. No click, no record.
         int containerSlots = containerSlotCount(handler);
-        List<InteractionTracker.Pending> fresh = interactions.fresh(Settings.bindTimeoutTicks);
+        List<InteractionTracker.Pending> fresh = interactions.fresh();
         InteractionTracker.Pending onlySlotMatch = null;
         int slotMatches = 0;
         for (InteractionTracker.Pending p : fresh) {

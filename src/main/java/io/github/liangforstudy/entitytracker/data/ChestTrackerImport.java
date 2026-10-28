@@ -75,7 +75,8 @@ public final class ChestTrackerImport {
         int items = 0, rawItems = 0, skipped = 0, dataVersion = 0;
         for (String dimension : root.keySet()) {
             CompoundTag dim = root.getCompoundOrEmpty(dimension);
-            dataVersion = Math.max(dataVersion, dim.getIntOr("MinecraftDataVersion", 0));
+            int dimVersion = dim.getIntOr("MinecraftDataVersion", 0);
+            dataVersion = Math.max(dataVersion, dimVersion);
             CompoundTag memories = dim.getCompoundOrEmpty("memories");
             for (String posKey : memories.keySet()) {
                 CompoundTag memory = memories.getCompoundOrEmpty(posKey);
@@ -118,15 +119,21 @@ public final class ChestTrackerImport {
                         slot++;
                         continue;
                     }
-                    JsonElement json = ItemStack.CODEC.parse(nbtOps, e).result()
+                    // An older Chest Tracker file's items are upgraded first, as the game upgrades worlds.
+                    Tag upgraded = ItemData.upgrade(NbtOps.INSTANCE, e, dimVersion);
+                    JsonElement json = ItemStack.CODEC.parse(nbtOps, upgraded).result()
                             .flatMap(stack -> ItemStack.CODEC.encodeStart(jsonOps, stack).result())
                             .orElse(null);
                     if (json == null) {
-                        // Unknown item (a mod that isn't installed): keep its raw data, like a live snapshot would.
-                        json = NbtOps.INSTANCE.convertTo(JsonOps.INSTANCE, e);
+                        // Unknown item (a mod that isn't installed, or a newer version): keep its raw data with
+                        // the version that wrote it, like a bank from a newer version.
+                        json = NbtOps.INSTANCE.convertTo(JsonOps.INSTANCE, upgraded);
                         rawItems++;
+                        int version = dimVersion > ItemData.CURRENT ? dimVersion : ItemData.CURRENT;
+                        r.items.add(new ContainerRecord.SlotItem(slot++, json, version));
+                    } else {
+                        r.items.add(new ContainerRecord.SlotItem(slot++, json));
                     }
-                    r.items.add(new ContainerRecord.SlotItem(slot++, json));
                     items++;
                 }
                 r.slotCount = Math.max(slots(type, !r.otherPositions.isEmpty()), r.items.size());

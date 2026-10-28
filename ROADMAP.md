@@ -28,7 +28,9 @@ as they get built, and get added or removed as plans change. For what works toda
   trash by themselves (restorable, and back if the container returns); one trash with entity, trade
   and block views
 - Safe binding on laggy servers; touch-friendly (PojavLauncher)
-- Builds for Minecraft 1.21.11 and 26.2
+- Builds for Minecraft 1.21.11 and 26.2, with one memory file that works in both (older items are
+  upgraded; newer ones are kept untouched by an older version, with a backup and a warning)
+- Click-to-screen wait that follows the server's lag
 - Villager and wandering trader offers in their own Trades screen: prices and stock as last seen,
   changes since your previous look, per-account prices, level-up and profession warnings
 - Chest Tracker importer: `/etracker import` brings Chest Tracker 2.x memory banks over (read-only,

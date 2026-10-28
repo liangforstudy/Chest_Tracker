@@ -34,6 +34,8 @@ public final class TradeData {
         public int level;
         public List<Offer> offers = new ArrayList<>();
         public @Nullable List<Offer> previous;
+        /** The game version that wrote these offers' items (see {@link ItemData}). */
+        public int dataVersion = ItemData.CURRENT;
     }
 
     /**
@@ -59,6 +61,12 @@ public final class TradeData {
             return o;
         }
 
+        Offer upgraded(int fromVersion) {
+            return new Offer(ItemData.upgrade(buy1, fromVersion), baseCount,
+                    buy2 == null ? null : ItemData.upgrade(buy2, fromVersion), ItemData.upgrade(sell, fromVersion),
+                    uses, maxUses, xp);
+        }
+
         static Offer fromJson(JsonObject o) {
             return new Offer(o.get("buy1"), o.has("baseCount") ? o.get("baseCount").getAsInt() : 0,
                     o.has("buy2") ? o.get("buy2") : null, o.get("sell"),
@@ -82,6 +90,25 @@ public final class TradeData {
         return null;
     }
 
+    /** Brings offers saved by an older version up to this one. Returns how many snapshots were upgraded. */
+    int upgradeItems() {
+        int n = 0;
+        for (Snapshot s : byAccount.values()) {
+            if (s.dataVersion >= ItemData.CURRENT) continue;
+            int from = s.dataVersion;
+            s.offers = s.offers.stream().map(offer -> offer.upgraded(from)).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+            if (s.previous != null) s.previous = s.previous.stream().map(offer -> offer.upgraded(from)).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+            s.dataVersion = ItemData.CURRENT;
+            n++;
+        }
+        return n;
+    }
+
+    /** Snapshots saved by a newer version than this one; kept exactly as they are. */
+    long newerSnapshots() {
+        return byAccount.values().stream().filter(s -> s.dataVersion > ItemData.CURRENT).count();
+    }
+
     JsonObject toJson() {
         JsonObject o = new JsonObject();
         if (profession != null) o.addProperty("profession", profession);
@@ -93,6 +120,7 @@ public final class TradeData {
             JsonObject so = new JsonObject();
             so.addProperty("time", s.time);
             so.addProperty("level", s.level);
+            so.addProperty("dataVersion", s.dataVersion);
             so.add("offers", offersToJson(s.offers));
             if (s.previous != null) so.add("previous", offersToJson(s.previous));
             accounts.add(e.getKey().toString(), so);
@@ -112,6 +140,7 @@ public final class TradeData {
                 Snapshot s = new Snapshot();
                 s.time = so.get("time").getAsLong();
                 s.level = so.has("level") ? so.get("level").getAsInt() : 0;
+                s.dataVersion = so.has("dataVersion") ? so.get("dataVersion").getAsInt() : ItemData.LEGACY;
                 s.offers = offersFromJson(so.getAsJsonArray("offers"));
                 if (so.has("previous")) s.previous = offersFromJson(so.getAsJsonArray("previous"));
                 t.byAccount.put(UUID.fromString(e.getKey()), s);

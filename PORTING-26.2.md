@@ -96,18 +96,30 @@ Played on 26.2 in the dev client through MCPFabric, on a copy of the 1.21.11 tes
   as 1.21.11's `displayClientMessage`, so messages behave the same.
 - Loading a 1.21.11 world in 26.2 shows "Create a backup before upgrading this world?" first.
 
-## Step 4: save format
+## Step 4: save format (done)
 
-Banks store items as raw `ItemStack.CODEC` JSON **without a data version**. Item components
-changed between 1.21.11 and 26.2, so old items may fail to parse and show as empty slots.
+`ItemData` holds the logic. Data versions: 1.21.11 = 4671, 26.2 = 4903.
 
-- Write `"dataVersion"` into the bank root next to `formatVersion`.
-- On load, upgrade older stacks with the game's DataFixer (`References.ITEM_STACK` through
-  `Dynamic<JsonElement>`). A missing `dataVersion` means 1.21.11.
-- Going back to 1.21.11: raw JSON keeps unopened records intact, but the 1.21.11 build should
-  back up and warn when it sees a newer `dataVersion`.
-- `/etracker import`: run imported stacks through the same upgrade (`ChestTrackerImport`
-  already reads the data version).
+- Every record writes `"dataVersion"` (the version of its items; an item from another version has
+  its own `"dataVersion"` in its slot); trade snapshots too; the bank root has the version that
+  last saved it. Missing means 1.21.11 (`ItemData.LEGACY`).
+- On load (IO thread), older items and trade offers go through the game's DataFixer
+  (`References.ITEM_STACK` on a `Dynamic<JsonElement>`) and are stamped with this version.
+- Newer items (an older game opening the bank) are never rewritten: they keep their JSON and
+  version until that container is opened again in this version. The file is copied to
+  `backups/<key>/from-newer-versions/<time>.json` and a chat warning is shown.
+- `ItemData.decode` is used wherever a saved item is shown or searched: if the codec can't read
+  it, the item still shows as its type and count.
+- Trade change marks are skipped when the previous offers are from a newer version.
+- `/etracker import`: Chest Tracker items are upgraded from the file's `MinecraftDataVersion`
+  before parsing; unreadable ones are kept raw with their version.
+- Tested 2026-10-28 with both dev clients on one bank: 26.2 upgraded 126 unversioned items
+  (114 container items compared byte for byte: none changed); 1.21.11 showed the warning, made
+  the copy, found every search result, and left all 81 records it didn't touch byte-identical;
+  a chest reopened there was saved as 4671 with a new item; back on 26.2 its 3 items were
+  upgraded and every search matched. (The 1.21.11 leg ran on the older 1.21.11 test world, so
+  blocks built later were missing there and went to the trash; back on 26.2 they were restored
+  as never opened. That's the two test worlds differing, not the save format.)
 - Found while testing step 3: simple items (diamonds, an enchanted book, a named sword) from a
   1.21.11 bank already read fine on 26.2. Both dev clients share `../RnD/run`, so 26.2 rewrites
   the same bank files in its own format; the mod's daily backup kept the 1.21.11 copy
@@ -197,17 +209,27 @@ Server: a copy of the 1.21.11 Paper test world, so the existing bank lined up wi
   Gone blocks show "destroyed" ("picked up" for a shulker box). One Trash button opens a trash
   with Entities, Trades and Blocks views; the Trades screen's Trash button opens it on Trades.
 
-Still to do: 4 (the way back to 1.21.11, needs step 4), 8 (trading and level-up), 12 (detail
+- 19 (lag proxy, 1000 +/- 600 ms): two unnamed chest minecarts clicked back to back each got
+  their own contents; donkey then a named minecart straight away, both right; two villagers back
+  to back, each kept its own offers; villager then a chest minecart, the cart got its own
+  contents; a barrel closed the moment its screen appeared kept the fresh contents; a barrel
+  emptied and closed at once matched the server (empty).
+- 19 at 2500 +/- 1500 ms: at first nothing but the donkey was recorded, because a click waited
+  only 3 s for its screen. Fixed: the wait follows the lag (twice the slowest recent
+  click-to-screen time or twice the ping, plus a second; 3 s to 20 s, `InteractionTracker`).
+  Retest: all of the above passed with screens arriving after ~7 s.
+
+Still to do: 8 (trading and level-up), 12 (detail
 view, book reader: needs hand tapping), 14 (GUI scales, resize, Vulkan: by hand), 15 (fuzzy
-search in the screen, dimension conversion), 17, 18 (inventory button with Mod Menu), 19 (lag
-proxy), mounted inventory key (by hand).
+search in the screen, dimension conversion), 17, 18 (inventory button with Mod Menu), mounted
+inventory key (by hand).
 
 ## Order of work
 
 1. Mojang names on 1.21.11 (done)
 2. Gradle setup for 26.2 (done)
 3. Code changes until it compiles (done)
-4. Save-format data version and upgrade
+4. Save-format data version and upgrade (done)
 5. Run the test plan, update README and ROADMAP
 
 26.3 and 26.4 snapshots are out too; once 26.2 builds, 26.3 should be a few more `//? if` blocks.

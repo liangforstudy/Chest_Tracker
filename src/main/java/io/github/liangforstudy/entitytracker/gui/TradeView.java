@@ -1,5 +1,6 @@
 package io.github.liangforstudy.entitytracker.gui;
 
+import io.github.liangforstudy.entitytracker.data.ItemData;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 import io.github.liangforstudy.entitytracker.EntityTrackerClient;
@@ -131,7 +132,7 @@ final class TradeView {
     static ItemStack decode(@Nullable JsonElement json) {
         Minecraft client = Minecraft.getInstance();
         if (json == null || client.level == null) return ItemStack.EMPTY;
-        return ItemStack.CODEC.parse(client.level.registryAccess().createSerializationContext(JsonOps.INSTANCE), json).result().orElse(ItemStack.EMPTY);
+        return ItemData.decode(client.level.registryAccess().createSerializationContext(JsonOps.INSTANCE), json);
     }
 
     /** "Enchanted Book (Mending)", "Iron Axe (Efficiency II)" rather than just the item name. */

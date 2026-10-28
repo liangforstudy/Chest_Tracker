@@ -89,9 +89,16 @@ with, searchable in their own screen.
   happen in the background, so even a huge base never freezes the game. Several addresses can share
   one memory (`server-aliases.json`); by default `9b9t.com`, `9b9t.org` and `2b2t.com` (which
   redirects to 9b9t) do. `2b2t.org`, the real 2b2t, stays separate.
+- **Works across Minecraft versions.** Every remembered item notes which game version saved it.
+  Moving up (1.21.11 to 26.2), older items are upgraded the way the game upgrades worlds. Opening
+  the memory in an older version by accident leaves the newer items exactly as they are (shown by
+  item type until you reopen those containers), keeps a copy of the file in
+  `backups/<server>/from-newer-versions/`, and says so in chat.
 - **High-ping aware.** Contents are only attributed to a container you actually clicked, matched in
   order and by name, so two minecarts clicked quickly on a laggy server each get their own
-  contents. Closing a screen before its contents arrive never overwrites what was remembered.
+  contents. How long a click waits for its screen follows the measured lag (at least 3 seconds,
+  up to 20), so screens that take several seconds to arrive are still recorded. Closing a screen
+  before its contents arrive never overwrites what was remembered.
 - **Touch-friendly.** Works on PojavLauncher: every action is reachable without a keyboard or
   right-click.
 

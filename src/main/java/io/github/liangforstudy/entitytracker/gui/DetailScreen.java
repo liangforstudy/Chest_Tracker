@@ -1,5 +1,6 @@
 package io.github.liangforstudy.entitytracker.gui;
 
+import io.github.liangforstudy.entitytracker.data.ItemData;
 import com.mojang.serialization.JsonOps;
 import io.github.liangforstudy.entitytracker.EntityTrackerClient;
 import io.github.liangforstudy.entitytracker.data.BlockRecord;
@@ -103,7 +104,7 @@ public final class DetailScreen extends Screen {
         if (minecraft == null || minecraft.level == null) return slots;
         var ops = minecraft.level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
         for (ContainerRecord.SlotItem item : record.items) {
-            ItemStack stack = ItemStack.CODEC.parse(ops, item.stack()).result().orElse(ItemStack.EMPTY);
+            ItemStack stack = ItemData.decode(ops, item.stack());
             while (slots.size() <= item.slot()) slots.add(ItemStack.EMPTY);
             slots.set(item.slot(), stack);
         }
