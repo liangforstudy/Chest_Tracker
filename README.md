@@ -44,6 +44,13 @@ with, searchable in their own screen.
   as they're found, nearest first, so on a big base the closest ones show up straight away.
 - **"On <your name>".** Your own inventory (and the shulkers and bundles in it) is searched too, listed first,
   so the sword you're looking for doesn't hide in your inventory.
+- **Tally.** How many of an item you have across the whole memory: type "totems" or "enchanted
+  golden apples" in the search and the line under it says "Totem of Undying: 214 in 12 containers
+  · 64 in ender chests · 3 on you". Shulker and bundle contents count; containers that may be gone
+  are counted apart. `/etracker tally <item>` says it in chat, and a bare `/etracker tally` lists
+  what you have most of. Players' words work too (gapple, egap, pearls, xp), and you can add your
+  own in `item-aliases.json`. A tally file is written beside the memory for scripts and bots to
+  read with the game closed; see [TALLY.md](TALLY.md).
 - **Detail view.** Click any result to see the container's last known contents as an inventory
   grid, with the matching items outlined. Tap a shulker or bundle to look inside it, or a book to
   read it. Donkeys, mules and llamas are laid out like their own screen: saddle (or carpet), a

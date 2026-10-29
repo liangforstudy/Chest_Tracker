@@ -4,6 +4,7 @@ import io.github.liangforstudy.entitytracker.command.DebugCommand;
 import io.github.liangforstudy.entitytracker.data.BankStorage;
 import io.github.liangforstudy.entitytracker.gui.OpenTriggers;
 import io.github.liangforstudy.entitytracker.search.HeadAliases;
+import io.github.liangforstudy.entitytracker.search.ItemQuery;
 import io.github.liangforstudy.entitytracker.search.ItemIndex;
 import io.github.liangforstudy.entitytracker.track.BankManager;
 import io.github.liangforstudy.entitytracker.track.DisplayTracker;
@@ -64,6 +65,7 @@ public class EntityTrackerClient implements ClientModInitializer {
     public void onInitializeClient() {
         banks = new BankManager(new BankStorage(FabricLoader.getInstance().getGameDir()));
         headAliases = new HeadAliases(FabricLoader.getInstance().getGameDir());
+        ItemQuery.loadAliases(banks.storage().root());
         interactions = new InteractionTracker();
         PositionTracker positions = new PositionTracker(banks, interactions);
         screens = new ScreenBinder(interactions, banks, positions);

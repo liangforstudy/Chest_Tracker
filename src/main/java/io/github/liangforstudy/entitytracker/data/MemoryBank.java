@@ -42,6 +42,7 @@ public final class MemoryBank {
     private List<String> lastAreaAction = new ArrayList<>();
     private boolean dirty;
     private int quietTicks;
+    private int revision;
 
     public MemoryBank(String key, String server) {
         this.key = key;
@@ -190,6 +191,12 @@ public final class MemoryBank {
     public void markDirty() {
         dirty = true;
         quietTicks = 0;
+        revision++;
+    }
+
+    /** Goes up with every change, for things worked out from the whole memory (the tally). */
+    public int revision() {
+        return revision;
     }
 
     public boolean isDirty() {

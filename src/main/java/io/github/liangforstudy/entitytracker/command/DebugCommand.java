@@ -17,6 +17,7 @@ import io.github.liangforstudy.entitytracker.gui.AreaConfirmScreen;
 import io.github.liangforstudy.entitytracker.gui.OpenTriggers;
 import io.github.liangforstudy.entitytracker.gui.TrackerScreen;
 import io.github.liangforstudy.entitytracker.gui.TradesScreen;
+import io.github.liangforstudy.entitytracker.search.TallyReport;
 import io.github.liangforstudy.entitytracker.track.BankManager;
 import io.github.liangforstudy.entitytracker.track.Trash;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -159,6 +160,18 @@ public final class DebugCommand {
                     return records.size();
                 }))
                 .then(searchNode(banks, "search"))
+                // How many of an item: "/etracker tally totems"; bare, the most plentiful items.
+                .then(literal("tally").executes(ctx -> {
+                    MemoryBank bank = banks.bank();
+                    if (bank == null) return fail(ctx.getSource(), "No bank open");
+                    TallyReport.top(bank, 10).forEach(ctx.getSource()::sendFeedback);
+                    return 1;
+                }).then(argument("item", StringArgumentType.greedyString()).executes(ctx -> {
+                    MemoryBank bank = banks.bank();
+                    if (bank == null) return fail(ctx.getSource(), "No bank open");
+                    TallyReport.lines(StringArgumentType.getString(ctx, "item"), bank).forEach(ctx.getSource()::sendFeedback);
+                    return 1;
+                })))
                 // Testing only (dev client): open a trader's detail view (test tools can't click list rows).
                 .then(literal("debug").requires(src -> FabricLoader.getInstance().isDevelopmentEnvironment())
                         .then(literal("trade").then(argument("name", StringArgumentType.greedyString()).executes(ctx -> {
