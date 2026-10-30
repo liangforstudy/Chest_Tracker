@@ -6,6 +6,7 @@ import io.github.liangforstudy.entitytracker.data.BankStorage;
 import io.github.liangforstudy.entitytracker.data.BlockRecord;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.gui.Messages;
+import io.github.liangforstudy.entitytracker.search.TallyReport;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
@@ -126,11 +127,14 @@ public final class BankManager {
     private void saveInBackground() {
         MemoryBank b = bank;
         var root = storage.snapshot(b);
+        // The tally needs the game (item names, the inventory), so it's put together here too.
+        var tally = Minecraft.getInstance().level != null ? TallyReport.export(b) : null;
         b.clearDirty();
         int size = b.size();
         lastWrite = io.submit(() -> {
             // A failed write marks the bank dirty again so the next save retries.
             if (!storage.write(b.key, root, size)) Minecraft.getInstance().execute(b::markDirty);
+            else if (tally != null) storage.writeTally(b.key, tally);
         });
     }
 

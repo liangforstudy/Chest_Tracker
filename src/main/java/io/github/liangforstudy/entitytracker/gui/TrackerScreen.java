@@ -10,6 +10,8 @@ import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.data.RecordStatus;
 import io.github.liangforstudy.entitytracker.search.Fuzzy;
 import io.github.liangforstudy.entitytracker.search.ItemIndex;
+import io.github.liangforstudy.entitytracker.search.ItemQuery;
+import io.github.liangforstudy.entitytracker.search.TallyReport;
 import io.github.liangforstudy.entitytracker.track.Trash;
 import org.lwjgl.glfw.GLFW;
 import org.jetbrains.annotations.Nullable;
@@ -19,6 +21,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
 import net.minecraft.client.Minecraft;
@@ -62,6 +65,8 @@ public final class TrackerScreen extends Screen {
     private boolean showDestroyed = true;
     /** The results shown are close matches, not exact ones. */
     private boolean fuzzy;
+    /** How many of the searched item the memory holds, when the search is an item ("totems"). */
+    private @Nullable Component tallyHint;
     /** Containers the current search hasn't looked at yet. */
     private int indexing;
     /** The search being worked through, a few milliseconds per frame; null when finished. */
@@ -408,9 +413,27 @@ public final class TrackerScreen extends Screen {
         String query = search.getValue().trim().toLowerCase(Locale.ROOT);
         if (query.startsWith("@")) query = query.substring(1); // @head:Notch until full filters (4.6)
         fuzzy = false;
-        job = new SearchJob(query, records());
+        MemoryBank bank = EntityTrackerClient.banks().bank();
+        tallyHint = bank == null || trashView || query.isEmpty() ? null : TallyReport.hint(query, bank);
+        job = new SearchJob(query, records(), namedItems(query));
         list.setRows(List.of());
         continueSearch();
+    }
+
+    /**
+     * The items a search names by alias or exact name ("totems", "gapples"), which count as exact
+     * matches although their text doesn't contain the words typed.
+     */
+    private static Set<Item> namedItems(String query) {
+        if (query.isEmpty()) return Set.of();
+        ItemQuery.Result result = ItemQuery.resolve(query);
+        if (result.kind() != ItemQuery.Kind.ALIAS && result.kind() != ItemQuery.Kind.EXACT) return Set.of();
+        Set<Item> items = new HashSet<>();
+        for (String id : result.ids()) {
+            Identifier parsed = Identifier.tryParse(id);
+            if (parsed != null) BuiltInRegistries.ITEM.getOptional(parsed).ifPresent(items::add);
+        }
+        return items;
     }
 
     /** Runs the current search for one frame's budget and puts what it found in the list. */
@@ -469,6 +492,7 @@ public final class TrackerScreen extends Screen {
     private static final class SearchJob {
         final String query;
         final String[] queryWords;
+        final Set<Item> namedItems;
         final List<ContainerRecord> records;
         final List<Row> exact = new ArrayList<>();
         final List<Row> close = new ArrayList<>();
@@ -477,8 +501,9 @@ public final class TrackerScreen extends Screen {
         int nextItem;
         boolean done;
 
-        SearchJob(String query, List<ContainerRecord> records) {
+        SearchJob(String query, List<ContainerRecord> records, Set<Item> namedItems) {
             this.query = query;
+            this.namedItems = namedItems;
             this.queryWords = Fuzzy.words(query);
             this.records = records;
         }
@@ -515,7 +540,8 @@ public final class TrackerScreen extends Screen {
                     for (; nextItem < items.size(); nextItem++) {
                         if ((nextItem & 31) == 31 && System.nanoTime() >= deadline) return;
                         ItemIndex.IndexedItem item = items.get(nextItem);
-                        if (item.searchText().contains(query) || bookMatches(item.bookText())) {
+                        if (item.searchText().contains(query) || bookMatches(item.bookText())
+                                || namedItems.contains(item.stack().getItem())) {
                             exact.add(new Row(record, item, 0));
                         } else if (exact.isEmpty() && close.size() < MAX_ROWS
                                 && Fuzzy.matches(item.searchText(), item.words(), queryWords)) {
@@ -577,6 +603,9 @@ public final class TrackerScreen extends Screen {
         } else if (selectMode || !selection.isEmpty()) {
             hint = Component.translatable("screen.entitytracker.hint.selected", selection.size());
             hintColor = 0xFF8FC8FF;
+        } else if (tallyHint != null) {
+            hint = tallyHint;
+            hintColor = 0xFFFFE08A;
         } else {
             hint = Component.translatable("screen.entitytracker.hint.select");
         }

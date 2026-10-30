@@ -71,6 +71,35 @@ public final class BankStorage {
         return root.resolve("backups").resolve(key);
     }
 
+    /** The mod's folder, {@code <game dir>/entity-tracker}. */
+    public Path root() {
+        return root;
+    }
+
+    /** How many of each item, for scripts and Zymbot (TALLY.md). */
+    public Path tallyFile(String key) {
+        return root.resolve("tally").resolve(key + ".json");
+    }
+
+    /** Writes the tally beside the bank, readable by people too. Safe off the game thread. */
+    public void writeTally(String key, JsonObject tally) {
+        if (readOnly.contains(key)) return;
+        Path file = tallyFile(key);
+        try {
+            Files.createDirectories(file.getParent());
+            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+            Files.writeString(tmp, GSON.toJson(tally), StandardCharsets.UTF_8);
+            try {
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            // Only the tally is stale; the bank itself was saved.
+            EntityTrackerClient.LOGGER.error("Failed to write the tally {}", file, e);
+        }
+    }
+
     /**
      * Server name after aliases; never the resolved IP or world name. Not the account: all of the
      * player's accounts share one bank per server.
