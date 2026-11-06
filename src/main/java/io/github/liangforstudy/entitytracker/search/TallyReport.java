@@ -52,6 +52,11 @@ public final class TallyReport {
         return together(result.ids(), tally, onYou);
     }
 
+    /** One item's line, by id (the tracker's grid view). */
+    public static Component line(String id, MemoryBank bank) {
+        return line(id, Tally.of(bank), onPlayer());
+    }
+
     /** The most plentiful items, for a bare {@code /etracker tally}. */
     public static List<Component> top(MemoryBank bank, int n) {
         Tally tally = Tally.of(bank);

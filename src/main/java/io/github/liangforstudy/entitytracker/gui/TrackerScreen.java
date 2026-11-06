@@ -11,6 +11,7 @@ import io.github.liangforstudy.entitytracker.data.RecordStatus;
 import io.github.liangforstudy.entitytracker.search.Fuzzy;
 import io.github.liangforstudy.entitytracker.search.ItemIndex;
 import io.github.liangforstudy.entitytracker.search.ItemQuery;
+import io.github.liangforstudy.entitytracker.search.Tally;
 import io.github.liangforstudy.entitytracker.search.TallyReport;
 import io.github.liangforstudy.entitytracker.track.Trash;
 import org.lwjgl.glfw.GLFW;
@@ -76,6 +77,28 @@ public final class TrackerScreen extends Screen {
     private boolean trashView;
     /** Which part of the trash is open. Kept apart so broken blocks don't bury entities. */
     private TrashKind trashKind = TrashKind.ENTITIES;
+    /**
+     * The grid: every item the memory holds at a glance, one slot per item type with its total
+     * (shulker and bundle contents counted, see {@link Tally}). Tapping one lists where it is.
+     */
+    private boolean gridView;
+    private Button gridButton;
+    private List<GridCell> grid = List.of();
+    private int gridScroll, gridMaxScroll, gridBottom, gridRevision = -1;
+    /** The list's place to go back to once the rebuilt list is long enough (-1: none). */
+    private double pendingScroll = -1;
+    private @Nullable Row pendingSelected;
+    /** The next rebuild shows a different list (the trash, another part of it): start at the top. */
+    private boolean freshList;
+    private int gridPressed = -1;
+    private boolean gridDragged;
+    /** The hovered cell's tooltip, worked out once per cell rather than every frame. */
+    private int tooltipCell = -1;
+    private List<net.minecraft.util.FormattedCharSequence> cellTooltip = List.of();
+    private static final int CELL = 20;
+
+    /** {@code shown}: the total, plus what may be gone while "Destroyed: shown". */
+    private record GridCell(String id, ItemStack stack, long shown) {}
 
     /** The trash's three views: storage entities, villagers and traders, and blocks. */
     public enum TrashKind {
@@ -119,9 +142,22 @@ public final class TrackerScreen extends Screen {
                 Component.translatable("screen.entitytracker.search"));
         search.setHint(Component.translatable("screen.entitytracker.search"));
         search.setValue(previous);
-        search.setResponder(q -> refresh());
+        search.setResponder(q -> {
+            // A new search starts at its top.
+            pendingScroll = -1;
+            pendingSelected = null;
+            refresh();
+        });
         addRenderableWidget(search);
 
+        // Coming back from a detail view (or a resize) rebuilds the list: keep its place and the
+        // container that was picked, so checking 400 chests one by one doesn't start over each time.
+        if (list != null && !freshList) {
+            pendingScroll = list.scrollAmount();
+            ResultList.Entry picked = list.getSelected();
+            pendingSelected = picked == null ? null : picked.row;
+        }
+        freshList = false;
         list = new ResultList(minecraft, width, height - 30 - LIST_Y, LIST_Y);
         addRenderableWidget(list);
         for (Button tab : ScreenTabs.create(minecraft, width, false)) addRenderableWidget(tab);
@@ -132,6 +168,7 @@ public final class TrackerScreen extends Screen {
         viewButton = addRenderableWidget(Button.builder(trashLabel(), b -> {
             trashView = !trashView;
             clearSelection();
+            freshList = true;
             rebuildWidgets();
         }).build());
         kindButtons.clear();
@@ -139,11 +176,18 @@ public final class TrackerScreen extends Screen {
             Button button = addRenderableWidget(Button.builder(kindLabel(kind), b -> {
                 trashKind = kind;
                 clearSelection();
+                freshList = true;
                 rebuildWidgets();
             }).build());
             button.active = kind != trashKind;
             kindButtons.add(button);
         }
+        gridButton = addRenderableWidget(Button.builder(gridLabel(), b -> {
+            gridView = !gridView;
+            gridScroll = 0;
+            b.setMessage(gridLabel());
+            refresh();
+        }).build());
         destroyedButton = addRenderableWidget(Button.builder(destroyedLabel(), b -> {
             showDestroyed = !showDestroyed;
             b.setMessage(destroyedLabel());
@@ -195,6 +239,15 @@ public final class TrackerScreen extends Screen {
         return Component.translatable(kind.key, bank == null ? 0 : kind.trashed(bank).count());
     }
 
+    /** Names the view the button goes to: "Grid" in the list, "List" in the grid. */
+    private Component gridLabel() {
+        return Component.translatable(gridView ? "screen.entitytracker.grid.to_list" : "screen.entitytracker.grid.to_grid");
+    }
+
+    private boolean showingGrid() {
+        return gridView && !trashView;
+    }
+
     private Component destroyedLabel() {
         return Component.translatable(showDestroyed ? "screen.entitytracker.destroyed_shown"
                 : "screen.entitytracker.destroyed_hidden");
@@ -204,7 +257,7 @@ public final class TrackerScreen extends Screen {
     private void updateBar() {
         boolean bulk = selectMode || !selection.isEmpty();
         List<Button> shown = new ArrayList<>();
-        for (Button b : List.of(viewButton, destroyedButton, selectButton, doneButton, bulkPrimary, bulkDelete,
+        for (Button b : List.of(viewButton, gridButton, destroyedButton, selectButton, doneButton, bulkPrimary, bulkDelete,
                 selectAllButton, cancelButton)) {
             b.visible = false;
         }
@@ -224,15 +277,21 @@ public final class TrackerScreen extends Screen {
             shown.add(cancelButton);
         } else {
             shown.add(viewButton);
-            if (trashView) shown.addAll(kindButtons);
-            else shown.add(destroyedButton);
-            shown.add(selectButton);
+            if (trashView) {
+                shown.addAll(kindButtons);
+            } else {
+                shown.add(gridButton);
+                shown.add(destroyedButton);
+            }
+            if (!showingGrid()) shown.add(selectButton); // selecting is for containers, in the list
             shown.add(doneButton);
         }
         for (Button b : shown) b.visible = true;
         // The list ends above the buttons, which take two rows on a narrow screen
         int top = ButtonBar.layout(shown, font, width, height, 120);
         list.updateSizeAndPosition(width, top - 4 - LIST_Y, LIST_Y);
+        list.visible = !showingGrid();
+        gridBottom = top - 4;
     }
 
     private void clearSelection() {
@@ -341,6 +400,9 @@ public final class TrackerScreen extends Screen {
         // carries on by itself in render, a few milliseconds per frame.)
         if (waitingForBank && EntityTrackerClient.banks().bank() != null) refreshKeepingScroll();
         waitingForBank = EntityTrackerClient.banks().bank() == null;
+        // The grid follows the memory while it's open (a container opened, an entity moved).
+        MemoryBank bank = EntityTrackerClient.banks().bank();
+        if (showingGrid() && bank != null && bank.revision() != gridRevision) refreshGrid();
     }
 
     private void refreshKeepingScroll() {
@@ -378,7 +440,13 @@ public final class TrackerScreen extends Screen {
             closeMenu(); // a click anywhere else just closes the menu
             return true;
         }
-        if (click.button() == 1) {
+        if (showingGrid() && click.button() == 0 && gridCellAt(click.x(), click.y()) >= 0) {
+            // Acted on at release, so a drag (scrolling on a touch screen) doesn't open anything.
+            gridPressed = gridCellAt(click.x(), click.y());
+            gridDragged = false;
+            return true;
+        }
+        if (click.button() == 1 && !showingGrid()) {
             ResultList.Entry entry = list.entryAt(click.x(), click.y());
             if (entry != null) {
                 list.setSelected(entry);
@@ -387,6 +455,44 @@ public final class TrackerScreen extends Screen {
             }
         }
         return super.mouseClicked(click, doubled);
+    }
+
+    /** A tap on a grid cell (pressed and released on it, no drag) lists where that item is. */
+    @Override
+    public boolean mouseReleased(MouseButtonEvent click) {
+        if (gridPressed >= 0) {
+            int pressed = gridPressed;
+            gridPressed = -1;
+            if (!gridDragged && showingGrid() && gridCellAt(click.x(), click.y()) == pressed) {
+                String name = grid.get(pressed).stack().getHoverName().getString();
+                gridView = false;
+                gridButton.setMessage(gridLabel());
+                search.setValue(name); // searches the list for it
+                updateBar();
+            }
+            return true;
+        }
+        return super.mouseReleased(click);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
+        if (showingGrid()) {
+            gridScroll = Math.clamp(gridScroll - (int) Math.round(vertical * CELL), 0, gridMaxScroll);
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
+    }
+
+    /** Dragging the grid scrolls it, for touch screens (PojavLauncher) without a wheel. */
+    @Override
+    public boolean mouseDragged(MouseButtonEvent click, double offsetX, double offsetY) {
+        if (showingGrid() && click.button() == 0 && click.y() >= LIST_Y && click.y() < gridBottom) {
+            gridDragged |= Math.abs(offsetY) > 0.5;
+            gridScroll = Math.clamp(gridScroll - (int) Math.round(offsetY), 0, gridMaxScroll);
+            return true;
+        }
+        return super.mouseDragged(click, offsetX, offsetY);
     }
 
     private void confirmDelete(ContainerRecord record) {
@@ -415,6 +521,14 @@ public final class TrackerScreen extends Screen {
         fuzzy = false;
         MemoryBank bank = EntityTrackerClient.banks().bank();
         tallyHint = bank == null || trashView || query.isEmpty() ? null : TallyReport.hint(query, bank);
+        if (showingGrid()) {
+            // The grid needs no search through containers: it comes from the tally.
+            job = null;
+            indexing = 0;
+            list.setRows(List.of());
+            refreshGrid();
+            return;
+        }
         job = new SearchJob(query, records(), namedItems(query));
         list.setRows(List.of());
         continueSearch();
@@ -436,6 +550,97 @@ public final class TrackerScreen extends Screen {
         return items;
     }
 
+    /**
+     * One cell per item type the memory holds, most first, narrowed to the search: item names, and
+     * players' words like "gapples" or "totems" (see {@link ItemQuery}).
+     */
+    private void refreshGrid() {
+        MemoryBank bank = EntityTrackerClient.banks().bank();
+        tooltipCell = -1;
+        if (bank == null) {
+            grid = List.of();
+            gridRevision = -1;
+            return;
+        }
+        String query = search.getValue().trim().toLowerCase(Locale.ROOT);
+        Set<Item> named = namedItems(query);
+        List<GridCell> cells = new ArrayList<>();
+        Tally.of(bank).items.forEach((id, count) -> {
+            long shown = count.total + (showDestroyed ? count.maybeGone : 0);
+            if (shown <= 0) return;
+            Identifier parsed = Identifier.tryParse(id);
+            Item item = parsed == null ? null : BuiltInRegistries.ITEM.getOptional(parsed).orElse(null);
+            if (item == null || item == Items.AIR) return;
+            ItemStack stack = new ItemStack(item);
+            if (!query.isEmpty() && !named.contains(item)
+                    && !stack.getHoverName().getString().toLowerCase(Locale.ROOT).contains(query)) return;
+            cells.add(new GridCell(id, stack, shown));
+        });
+        cells.sort(Comparator.comparingLong(GridCell::shown).reversed()
+                .thenComparing(c -> c.stack().getHoverName().getString()));
+        grid = cells;
+        gridRevision = bank.revision();
+    }
+
+    private int gridColumns() {
+        return Math.max(1, Math.min(24, (width - 24) / CELL));
+    }
+
+    private int gridCellAt(double mx, double my) {
+        if (my < LIST_Y || my >= gridBottom) return -1;
+        int cols = gridColumns();
+        int left = (width - cols * CELL) / 2;
+        if (mx < left || mx >= left + cols * CELL) return -1;
+        int i = (int) ((my - LIST_Y + gridScroll) / CELL) * cols + (int) ((mx - left) / CELL);
+        return i < grid.size() ? i : -1;
+    }
+
+    /** 3456 stays as it is; bigger numbers are shortened so they fit under the slot: 12k, 1.2M. */
+    private static String shortCount(long n) {
+        if (n < 10_000) return Long.toString(n);
+        if (n < 1_000_000) return n / 1000 + "k";
+        return String.format(Locale.ROOT, "%.1fM", n / 1_000_000.0);
+    }
+
+    private void renderGrid(GuiGraphics context, int mouseX, int mouseY) {
+        int cols = gridColumns();
+        int left = (width - cols * CELL) / 2;
+        int rows = (grid.size() + cols - 1) / cols;
+        gridMaxScroll = Math.max(0, rows * CELL - (gridBottom - LIST_Y));
+        gridScroll = Math.clamp(gridScroll, 0, gridMaxScroll);
+        int hovered = menu.isEmpty() ? gridCellAt(mouseX, mouseY) : -1;
+        context.enableScissor(0, LIST_Y, width, gridBottom);
+        for (int i = 0; i < grid.size(); i++) {
+            int x = left + (i % cols) * CELL + 1;
+            int y = LIST_Y + (i / cols) * CELL - gridScroll + 1;
+            if (y + CELL < LIST_Y || y > gridBottom) continue;
+            GridCell cell = grid.get(i);
+            context.fill(x, y, x + 18, y + 18, i == hovered ? 0x60FFFFFF : 0x28FFFFFF);
+            context.renderItem(cell.stack(), x + 1, y + 1);
+            context.renderItemDecorations(font, cell.stack(), x + 1, y + 1, shortCount(cell.shown()));
+        }
+        context.disableScissor();
+        if (gridMaxScroll > 0) {
+            int view = gridBottom - LIST_Y;
+            int barH = Math.max(12, view * view / (view + gridMaxScroll));
+            int barY = LIST_Y + (view - barH) * gridScroll / gridMaxScroll;
+            context.fill(width - 5, LIST_Y, width - 2, gridBottom, 0x40FFFFFF);
+            context.fill(width - 5, barY, width - 2, barY + barH, 0xC0FFFFFF);
+        }
+        if (hovered < 0) return;
+        if (hovered != tooltipCell) {
+            MemoryBank bank = EntityTrackerClient.banks().bank();
+            List<net.minecraft.util.FormattedCharSequence> lines = new ArrayList<>();
+            GridCell cell = grid.get(hovered);
+            lines.add(cell.stack().getHoverName().getVisualOrderText());
+            if (bank != null) lines.addAll(font.split(TallyReport.line(cell.id(), bank), 220));
+            lines.add(Component.translatable("screen.entitytracker.grid.tap").getVisualOrderText());
+            cellTooltip = lines;
+            tooltipCell = hovered;
+        }
+        context.setTooltipForNextFrame(cellTooltip, mouseX, mouseY);
+    }
+
     /** Runs the current search for one frame's budget and puts what it found in the list. */
     private void continueSearch() {
         if (job == null) return;
@@ -454,9 +659,34 @@ public final class TrackerScreen extends Screen {
             fuzzy = true;
         }
         indexing = job.done ? 0 : job.remaining();
+        restorePlace(job.done);
         if (job.done) job = null;
         long ms = (System.nanoTime() - start) / 1_000_000;
         if (ms > 16) EntityTrackerClient.LOGGER.warn("Tracker search step took {} ms (longer than a frame)", ms);
+    }
+
+    /**
+     * After the list was rebuilt: the picked row is selected again as soon as it's back, and the
+     * scroll put back once the search has refilled the list far enough (or has finished).
+     */
+    private void restorePlace(boolean searchDone) {
+        if (pendingSelected != null) {
+            for (ResultList.Entry e : list.children()) {
+                // The same container, and the same item in it (rows are rebuilt, so not by identity).
+                if (e.row.record() == pendingSelected.record() && (pendingSelected.item() == null
+                        || e.row.item() != null && e.row.item().stack() == pendingSelected.item().stack()
+                        && e.row.item().path().equals(pendingSelected.item().path()))) {
+                    list.setSelected(e);
+                    pendingSelected = null;
+                    break;
+                }
+            }
+        }
+        if (pendingScroll >= 0 && (searchDone || list.maxScrollAmount() >= pendingScroll)) {
+            list.setScrollAmount(pendingScroll);
+            pendingScroll = -1;
+        }
+        if (searchDone) pendingSelected = null;
     }
 
     /** "close matches" next to the search field, when the results are fuzzy ones. */
@@ -588,6 +818,7 @@ public final class TrackerScreen extends Screen {
         pendingTooltip = null;
         continueSearch(); // a search still in progress adds this frame's results before drawing
         super.render(context, mouseX, mouseY, delta);
+        if (showingGrid()) renderGrid(context, mouseX, mouseY);
         if (pendingTooltip != null) drawExplanation(context, font, pendingTooltip, tooltipX, tooltipY);
         ScreenTabs.drawUnderline(context, width, false);
         if (fuzzy) drawFuzzyNote(context, font, search);
@@ -606,6 +837,8 @@ public final class TrackerScreen extends Screen {
         } else if (tallyHint != null) {
             hint = tallyHint;
             hintColor = 0xFFFFE08A;
+        } else if (showingGrid()) {
+            hint = Component.translatable("screen.entitytracker.grid.hint", grid.size());
         } else {
             hint = Component.translatable("screen.entitytracker.hint.select");
         }
@@ -614,7 +847,7 @@ public final class TrackerScreen extends Screen {
             context.drawCenteredString(font, Component.translatable(EntityTrackerClient.banks().isLoading()
                     ? "screen.entitytracker.loading" : "screen.entitytracker.no_bank"),
                     width / 2, height / 2, 0xFFAAAAAA);
-        } else if (list.children().isEmpty() && job == null) {
+        } else if (showingGrid() ? grid.isEmpty() : list.children().isEmpty() && job == null) {
             context.drawCenteredString(font, Component.translatable("screen.entitytracker.no_results"),
                     width / 2, height / 2, 0xFFAAAAAA);
         }

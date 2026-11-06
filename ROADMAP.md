@@ -21,6 +21,8 @@ as they get built, and get added or removed as plans change. For what works toda
 - Search: names, lore, enchantments, player heads and textures (with aliases), items nested in
   shulkers and bundles, your own inventory ("On <your name>")
 - Tracker screen, detail view with contents grid, coordinates converted between dimensions
+- Grid view of every item remembered, one slot per kind with its total; the list keeps its place
+  when you come back from a container
 - Detection: missing, likely destroyed, went through a portal, chest removed, container changed,
   hints for containers whose contents change on their own, "last checked" in play days, and an
   explanation for every warning

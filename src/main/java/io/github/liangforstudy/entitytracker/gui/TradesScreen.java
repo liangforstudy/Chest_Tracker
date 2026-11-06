@@ -76,6 +76,8 @@ public final class TradesScreen extends Screen {
         search.setResponder(q -> refresh());
         addRenderableWidget(search);
 
+        // Coming back from a villager's details (or a resize) rebuilds the list: keep its place.
+        double keepScroll = list != null ? list.scrollAmount() : 0;
         list = new ResultList(minecraft, width, height - 30 - TrackerScreen.LIST_Y, TrackerScreen.LIST_Y);
         addRenderableWidget(list);
         for (Button tab : ScreenTabs.create(minecraft, width, true)) addRenderableWidget(tab);
@@ -95,6 +97,7 @@ public final class TradesScreen extends Screen {
         layoutBar();
         setInitialFocus(search);
         refresh();
+        list.setScrollAmount(keepScroll);
     }
 
     private void refresh() {

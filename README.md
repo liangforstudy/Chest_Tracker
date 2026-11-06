@@ -51,6 +51,9 @@ with, searchable in their own screen.
   what you have most of. Players' words work too (gapple, egap, pearls, xp), and you can add your
   own in `item-aliases.json`. A tally file is written beside the memory for scripts and bots to
   read with the game closed; see [TALLY.md](TALLY.md).
+- **Grid.** The **Grid** button shows everything the memory holds at a glance: one slot per kind
+  of item with its total, most first, shulker and bundle contents counted. Typing in the search
+  narrows it; tap an item to list where it is.
 - **Detail view.** Click any result to see the container's last known contents as an inventory
   grid, with the matching items outlined. Tap a shulker or bundle to look inside it, or a book to
   read it. Donkeys, mules and llamas are laid out like their own screen: saddle (or carpet), a
