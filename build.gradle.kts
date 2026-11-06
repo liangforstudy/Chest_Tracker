@@ -31,6 +31,7 @@ sc.replacements {
     rename("context.renderItem(", "context.item(")
     rename("context.renderItemDecorations(", "context.itemDecorations(")
     rename("InventoryScreen.renderEntityInInventoryFollowsMouse(", "InventoryScreen.extractEntityInInventoryFollowsMouse(")
+    rename("gameRenderer.getMainCamera()", "gameRenderer.mainCamera()")
     // The current screen moved from Minecraft to Minecraft.gui
     regex(mc26) { replace("\\b(minecraft|client)\\.setScreen\\(", "\$1.gui.setScreen(", "\\b(minecraft|client)\\.gui\\.setScreen\\(", "\$1.setScreen(") }
     rename("client.screen == null", "client.gui.screen() == null")

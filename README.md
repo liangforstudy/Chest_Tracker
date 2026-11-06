@@ -54,6 +54,15 @@ with, searchable in their own screen.
 - **Grid.** The **Grid** button shows everything the memory holds at a glance: one slot per kind
   of item with its total, most first, shulker and bundle contents counted. Typing in the search
   narrows it; tap an item to list where it is.
+- **Tracers.** Pick containers (**Trace** in a row's menu or the detail view, or select several and
+  **Trace**) and lines go from your crosshair to each one, through walls, with an outline and a
+  label ("Chest · 46 m"). A donkey or minecart near you is followed as it moves; one that isn't
+  loaded gets a dashed line to where it was last seen. A line goes away once you open that
+  container. Up to 16 at once, nearest first; traced containers in another dimension are counted
+  in the top left corner instead. **Tracers (n)** in the tracker hides, shows or clears them, and
+  the **Toggle tracers** key (unbound, set it in Controls) hides and shows them. Drawn on your
+  screen only; nothing is sent to the server. Some servers ban anything called tracers, whatever
+  it points at: check the rules.
 - **Detail view.** Click any result to see the container's last known contents as an inventory
   grid, with the matching items outlined. Tap a shulker or bundle to look inside it, or a book to
   read it. Donkeys, mules and llamas are laid out like their own screen: saddle (or carpet), a

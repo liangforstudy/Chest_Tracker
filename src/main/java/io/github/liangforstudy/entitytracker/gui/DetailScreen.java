@@ -10,6 +10,7 @@ import io.github.liangforstudy.entitytracker.data.InventoryRecord;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.data.RecordStatus;
 import io.github.liangforstudy.entitytracker.search.ItemIndex;
+import io.github.liangforstudy.entitytracker.trace.Tracers;
 import io.github.liangforstudy.entitytracker.track.Trash;
 import org.lwjgl.glfw.GLFW;
 
@@ -94,6 +95,20 @@ public final class DetailScreen extends Screen {
                     b -> TrackerScreen.copyCoords(minecraft, record, false))
                     .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("screen.entitytracker.detail.copy_xz_tip")))
                     .build());
+            if (!record.isTrashed()) {
+                boolean traced = Tracers.isTraced(record);
+                buttons.add(Button.builder(Component.translatable(traced ? "screen.entitytracker.untrace" : "screen.entitytracker.trace"), b -> {
+                    if (traced) {
+                        Tracers.remove(record);
+                        rebuildWidgets();
+                    } else {
+                        // Back to the game, where the line is.
+                        Tracers.add(List.of(record));
+                        Messages.chat(Component.translatable("screen.entitytracker.tracers.started", TrackerScreen.label(record)));
+                        minecraft.setScreen(null);
+                    }
+                }).build());
+            }
             buttons.add(Button.builder(record.isTrashed()
                     ? Component.translatable("screen.entitytracker.restore") : TrackerScreen.markLabel(record), b -> toggleTrash())
                     .build());

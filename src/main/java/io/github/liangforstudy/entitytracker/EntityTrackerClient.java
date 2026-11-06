@@ -12,7 +12,10 @@ import io.github.liangforstudy.entitytracker.track.InteractionTracker;
 import io.github.liangforstudy.entitytracker.track.PositionTracker;
 import io.github.liangforstudy.entitytracker.track.ScreenBinder;
 import io.github.liangforstudy.entitytracker.track.TradeBinder;
+import io.github.liangforstudy.entitytracker.trace.Tracers;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.minecraft.resources.Identifier;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -81,6 +84,7 @@ public class EntityTrackerClient implements ClientModInitializer {
             banks.tick(client);
             positions.tick(client);
             displays.tick(client);
+            Tracers.tick(banks.bank());
             // Build the search index a little at a time (1 ms per tick), so opening the
             // tracker and searching are instant and never freeze the game.
             var bank = banks.bank();
@@ -89,6 +93,7 @@ public class EntityTrackerClient implements ClientModInitializer {
         // DISCONNECT fires on the network thread; do the bank work on the game thread.
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(() -> {
             interactions.clear();
+            Tracers.clear(); // they belong to this server's memory
             banks.close();
             index.clear();
         }));
@@ -97,6 +102,8 @@ public class EntityTrackerClient implements ClientModInitializer {
                 DebugCommand.register(dispatcher, banks));
 
         OpenTriggers.register();
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("entitytracker", "tracers"),
+                (context, deltaTracker) -> Tracers.renderHud(context));
 
         LOGGER.info("Entity Container Tracker loaded");
     }

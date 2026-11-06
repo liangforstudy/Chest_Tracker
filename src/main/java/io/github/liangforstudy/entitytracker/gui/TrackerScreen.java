@@ -13,6 +13,7 @@ import io.github.liangforstudy.entitytracker.search.ItemIndex;
 import io.github.liangforstudy.entitytracker.search.ItemQuery;
 import io.github.liangforstudy.entitytracker.search.Tally;
 import io.github.liangforstudy.entitytracker.search.TallyReport;
+import io.github.liangforstudy.entitytracker.trace.Tracers;
 import io.github.liangforstudy.entitytracker.track.Trash;
 import org.lwjgl.glfw.GLFW;
 import org.jetbrains.annotations.Nullable;
@@ -61,6 +62,8 @@ public final class TrackerScreen extends Screen {
     /** In the trash: one button per kind, the open one greyed out. */
     private final List<Button> kindButtons = new ArrayList<>();
     private Button bulkPrimary, bulkDelete, selectAllButton, cancelButton;
+    /** "Trace n" for the selection; "Tracers (n)" while anything is traced. */
+    private Button bulkTrace, tracersButton;
     private int tooltipX, tooltipY;
     private ResultList list;
     private boolean showDestroyed = true;
@@ -201,6 +204,13 @@ public final class TrackerScreen extends Screen {
         doneButton = addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, b -> onClose()).build());
         bulkPrimary = addRenderableWidget(Button.builder(Component.empty(), b -> bulkPrimary()).build());
         bulkDelete = addRenderableWidget(Button.builder(Component.empty(), b -> bulkDelete()).build());
+        bulkTrace = addRenderableWidget(Button.builder(Component.empty(), b -> {
+            List<ContainerRecord> records = selectedRecords();
+            if (records.isEmpty()) return;
+            clearSelection();
+            trace(records);
+        }).build());
+        tracersButton = addRenderableWidget(Button.builder(Component.empty(), this::openTracersMenu).build());
         selectAllButton = addRenderableWidget(Button.builder(Component.translatable("screen.entitytracker.select_all"), b -> {
             for (ResultList.Entry e : list.children()) {
                 if (!(e.row.record() instanceof InventoryRecord)) selection.add(e.row.record().key());
@@ -258,7 +268,7 @@ public final class TrackerScreen extends Screen {
         boolean bulk = selectMode || !selection.isEmpty();
         List<Button> shown = new ArrayList<>();
         for (Button b : List.of(viewButton, gridButton, destroyedButton, selectButton, doneButton, bulkPrimary, bulkDelete,
-                selectAllButton, cancelButton)) {
+                bulkTrace, tracersButton, selectAllButton, cancelButton)) {
             b.visible = false;
         }
         for (Button b : kindButtons) b.visible = false;
@@ -272,6 +282,10 @@ public final class TrackerScreen extends Screen {
                 bulkDelete.setMessage(Component.translatable("screen.entitytracker.bulk.delete", n));
                 bulkDelete.active = n > 0;
                 shown.add(bulkDelete);
+            } else {
+                bulkTrace.setMessage(Component.translatable("screen.entitytracker.bulk.trace", n));
+                bulkTrace.active = n > 0;
+                shown.add(bulkTrace);
             }
             shown.add(selectAllButton);
             shown.add(cancelButton);
@@ -284,6 +298,10 @@ public final class TrackerScreen extends Screen {
                 shown.add(destroyedButton);
             }
             if (!showingGrid()) shown.add(selectButton); // selecting is for containers, in the list
+            if (!trashView && Tracers.count() > 0) {
+                tracersButton.setMessage(Component.translatable("screen.entitytracker.tracers", Tracers.count()));
+                shown.add(tracersButton);
+            }
             shown.add(doneButton);
         }
         for (Button b : shown) b.visible = true;
@@ -363,11 +381,43 @@ public final class TrackerScreen extends Screen {
                     minecraft.setScreen(new DetailScreen(record, this, ""));
                 }));
             }
+            if (Tracers.isTraced(record)) {
+                items.add(Button.builder(Component.translatable("screen.entitytracker.untrace"),
+                        b -> act(() -> Tracers.remove(record))));
+            } else {
+                items.add(Button.builder(Component.translatable("screen.entitytracker.trace"), b -> {
+                    closeMenu();
+                    trace(List.of(record));
+                }));
+            }
             items.add(Button.builder(markLabel(record), b -> act(() -> {
                 MemoryBank bank = EntityTrackerClient.banks().bank();
                 if (bank != null) Trash.trash(bank, record);
             })));
         }
+        showMenu(items, x, y);
+    }
+
+    /** Traces these containers and goes back to the game, where the lines are. */
+    void trace(List<ContainerRecord> records) {
+        Tracers.add(records);
+        Messages.chat(Component.translatable("screen.entitytracker.tracers.started",
+                records.size() == 1 ? label(records.get(0)) : String.valueOf(records.size())));
+        minecraft.setScreen(null);
+    }
+
+    /** The tracers' own menu, from the "Tracers (n)" button: hide or show, clear. */
+    private void openTracersMenu(Button from) {
+        closeMenu();
+        List<Button.Builder> items = new ArrayList<>();
+        items.add(Button.builder(Component.translatable(Tracers.hidden() ? "screen.entitytracker.tracers.show"
+                : "screen.entitytracker.tracers.hide"), b -> act(Tracers::toggle)));
+        items.add(Button.builder(Component.translatable("screen.entitytracker.tracers.clear"), b -> act(Tracers::clear)));
+        // Above the button, since it sits in the bottom bar.
+        showMenu(items, from.getX(), from.getY() - items.size() * 20 - 2);
+    }
+
+    private void showMenu(List<Button.Builder> items, double x, double y) {
         menuW = 120;
         menuH = items.size() * 20;
         menuX = (int) Math.min(x, width - menuW - 4);

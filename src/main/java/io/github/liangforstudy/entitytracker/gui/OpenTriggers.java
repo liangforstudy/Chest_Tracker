@@ -1,6 +1,7 @@
 package io.github.liangforstudy.entitytracker.gui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import io.github.liangforstudy.entitytracker.trace.Tracers;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -30,7 +31,11 @@ public final class OpenTriggers {
         // Unbound by default: the Trades button on the tracker screen is the main way in.
         KeyMapping trades = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.entitytracker.trades",
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
+        // Unbound too: hides or shows the tracer lines without forgetting them (also a button in the tracker).
+        KeyMapping toggleTracers = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.entitytracker.toggle_tracers",
+                InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            while (toggleTracers.consumeClick()) Tracers.toggle();
             while (open.consumeClick()) {
                 if (client.screen == null && client.level != null) client.setScreen(new TrackerScreen());
             }

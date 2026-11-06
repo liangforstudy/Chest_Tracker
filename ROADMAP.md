@@ -23,6 +23,8 @@ as they get built, and get added or removed as plans change. For what works toda
 - Tracker screen, detail view with contents grid, coordinates converted between dimensions
 - Grid view of every item remembered, one slot per kind with its total; the list keeps its place
   when you come back from a container
+- Tracer lines from the crosshair to picked containers, through walls, following loaded animals
+  and minecarts, dashed to where unloaded ones were last seen; cleared once opened
 - Detection: missing, likely destroyed, went through a portal, chest removed, container changed,
   hints for containers whose contents change on their own, "last checked" in play days, and an
   explanation for every warning
@@ -49,7 +51,9 @@ as they get built, and get added or removed as plans change. For what works toda
 
 - In-world area selection box that works with freecam, and Litematica selections
 - Search filters (`@ench:mending`, `@in:donkey`, `@here`, ...)
-- Tracer lines from the crosshair to selected results
+- Tracers, more: colours you can pick, an outline glow on traced animals and minecarts, labels
+  that don't overlap when containers are close together, and handing block outlines to highlight
+  mods
 - Named groups of containers ("Base 1", "Base 2") with per-group totals
 - Settings screen (via Mod Menu)
 - Testing on servers that use ViaVersion, and on a real modpack instance
