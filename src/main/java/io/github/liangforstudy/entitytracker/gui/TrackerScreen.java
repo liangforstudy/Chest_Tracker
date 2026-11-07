@@ -486,7 +486,14 @@ public final class TrackerScreen extends Screen {
     @Override
     public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (!menu.isEmpty()) {
-            if (insideMenu(click.x(), click.y())) return super.mouseClicked(click, doubled);
+            if (insideMenu(click.x(), click.y())) {
+                // Only the menu's own buttons: the screen's other widgets come first in its
+                // children, so the list or a button under the menu would take the click.
+                for (Button b : List.copyOf(menu)) {
+                    if (b.isMouseOver(click.x(), click.y())) return b.mouseClicked(click, doubled);
+                }
+                return true;
+            }
             closeMenu(); // a click anywhere else just closes the menu
             return true;
         }

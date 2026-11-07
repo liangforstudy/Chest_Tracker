@@ -21,7 +21,10 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
-import org.joml.Vector3fc;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
+import com.mojang.blaze3d.vertex.PoseStack;
+import io.github.liangforstudy.entitytracker.mixin.client.GameRendererAccessor;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -114,9 +117,7 @@ public final class Tracers {
         Camera camera = client.gameRenderer.getMainCamera();
         if (!camera.isInitialized()) return;
         Vec3 eye = camera.position();
-        Vector3fc look = camera.forwardVector();
-        // A little in front of the eye: a line from the eye itself would be a single point.
-        Vec3 start = eye.add(look.x() * 0.5, look.y() * 0.5, look.z() * 0.5);
+        Vec3 start = crosshair(client, camera, eye);
 
         String dimension = Dimensions.current();
         if (dimension == null) return;
@@ -136,6 +137,29 @@ public final class Tracers {
         //?}
             for (int i = 0; i < Math.min(MAX_LINES, targets.size()); i++) draw(targets.get(i), start);
         }
+    }
+
+    /**
+     * The point half a block in front of the eye that's drawn exactly under the crosshair. Walking
+     * bobs the picture (and taking damage shakes it) without moving the camera, so a point straight
+     * ahead of the camera would wobble around the crosshair: undo the game's own bob for it.
+     */
+    private static Vec3 crosshair(Minecraft client, Camera camera, Vec3 eye) {
+        GameRendererAccessor renderer = (GameRendererAccessor) client.gameRenderer;
+        PoseStack bob = new PoseStack();
+        //? if >=26.2 {
+        /*var state = renderer.entitytracker$gameRenderState().levelRenderState.cameraRenderState;
+        renderer.entitytracker$bobHurt(state, bob);
+        if (client.options.bobView().get()) renderer.entitytracker$bobView(state, bob);
+        *///?} else {
+        float partialTick = camera.getPartialTickTime();
+        renderer.entitytracker$bobHurt(bob, partialTick);
+        if (client.options.bobView().get()) renderer.entitytracker$bobView(bob, partialTick);
+        //?}
+        // On screen = projection × bob × view: the view-space point the bob moves to (0, 0, -0.5).
+        Vector3f view = new Matrix4f(bob.last().pose()).invert().transformPosition(new Vector3f(0, 0, -0.5f));
+        camera.rotation().transform(view);
+        return eye.add(view.x(), view.y(), view.z());
     }
 
     private static Map<UUID, Entity> loadedEntities(Minecraft client, MemoryBank bank) {

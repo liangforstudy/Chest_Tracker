@@ -187,7 +187,13 @@ public final class TradesScreen extends Screen {
     public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (!menu.isEmpty()) {
             boolean inside = click.x() >= menuX && click.x() < menuX + menuW && click.y() >= menuY && click.y() < menuY + menuH;
-            if (inside) return super.mouseClicked(click, doubled);
+            if (inside) {
+                // Only the menu's own button: widgets under it come first in the screen's children.
+                for (Button b : List.copyOf(menu)) {
+                    if (b.isMouseOver(click.x(), click.y())) return b.mouseClicked(click, doubled);
+                }
+                return true;
+            }
             closeMenu(); // a click anywhere else just closes the menu
             return true;
         }
