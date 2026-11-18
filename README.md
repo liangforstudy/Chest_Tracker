@@ -79,7 +79,9 @@ with, searchable in their own screen.
   loaded gets a dashed line to where it was last seen. A line goes away once you open that
   container. Up to 16 at once, nearest first; traced containers in another dimension are counted
   in the top left corner instead. **Tracers (n)** in the tracker hides, shows or clears them, and
-  the **Toggle tracers** key (unbound, set it in Controls) hides and shows them. Drawn on your
+  the **Toggle tracers** key (unbound, set it in Controls) hides and shows them, so you can turn
+  them off as you walk up to the chest. `/etracker tracers` does the same from chat (`hide`,
+  `show`, or `clear` to forget them). Drawn on your
   screen only; nothing is sent to the server. Some servers ban anything called tracers, whatever
   it points at: check the rules.
 - **Detail view.** Click any result to see the container's last known contents as an inventory

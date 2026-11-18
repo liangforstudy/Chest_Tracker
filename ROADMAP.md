@@ -47,6 +47,7 @@ as they get built, and get added or removed as plans change. For what works toda
 - Streamer mode: coordinates hidden everywhere and kept off the clipboard; a second open key
   (Numpad 5)
 - Settings screen via Mod Menu (optional), with the streamer settings so far
+- `/etracker tracers` (hide, show, clear) besides the Toggle tracers key
 
 ## Next
 

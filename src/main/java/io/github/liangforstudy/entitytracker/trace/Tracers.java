@@ -96,6 +96,17 @@ public final class Tracers {
         hidden = !hidden;
     }
 
+    public static void setHidden(boolean value) {
+        hidden = value;
+    }
+
+    /** Says what just happened to the lines: hidden (and how to get them back), shown, cleared. */
+    public static net.minecraft.network.chat.Component status() {
+        if (traced.isEmpty()) return net.minecraft.network.chat.Component.translatable("screen.entitytracker.tracers.none");
+        return net.minecraft.network.chat.Component.translatable(hidden ? "screen.entitytracker.tracers.now_hidden"
+                : "screen.entitytracker.tracers.now_shown", traced.size());
+    }
+
     /** Drops containers opened since they were traced, gone from memory, or put in the trash. */
     public static void tick(@Nullable MemoryBank bank) {
         if (bank == null || traced.isEmpty()) return;

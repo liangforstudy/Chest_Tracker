@@ -42,7 +42,10 @@ public final class OpenTriggers {
         KeyMapping streamer = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.entitytracker.toggle_streamer",
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (toggleTracers.consumeClick()) Tracers.toggle();
+            while (toggleTracers.consumeClick()) {
+                Tracers.toggle();
+                Messages.actionBar(Tracers.status());
+            }
             while (streamer.consumeClick()) {
                 StreamerMode.toggle();
                 Messages.actionBar(Component.translatable(StreamerMode.on()

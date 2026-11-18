@@ -45,6 +45,12 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.lit
 public final class DebugCommand {
     private DebugCommand() {}
 
+    private static int tracers(FabricClientCommandSource source, boolean hide) {
+        io.github.liangforstudy.entitytracker.trace.Tracers.setHidden(hide);
+        source.sendFeedback(io.github.liangforstudy.entitytracker.trace.Tracers.status());
+        return 1;
+    }
+
     private static int allowClipboard(FabricClientCommandSource source, boolean allow) {
         io.github.liangforstudy.entitytracker.StreamerMode.setAllowClipboard(allow);
         source.sendFeedback(Component.translatable(allow ? "screen.entitytracker.streamer.clipboard_on"
@@ -68,6 +74,16 @@ public final class DebugCommand {
                         .then(literal("allowclipboard").executes(ctx -> allowClipboard(ctx.getSource(), false))
                                 .then(argument("allow", com.mojang.brigadier.arguments.BoolArgumentType.bool()).executes(ctx ->
                                         allowClipboard(ctx.getSource(), com.mojang.brigadier.arguments.BoolArgumentType.getBool(ctx, "allow"))))))
+                // Tracers without opening the screen: no value toggles them; hide / show keep
+                // what's traced, clear forgets it.
+                .then(literal("tracers").executes(ctx -> tracers(ctx.getSource(), !io.github.liangforstudy.entitytracker.trace.Tracers.hidden()))
+                        .then(literal("hide").executes(ctx -> tracers(ctx.getSource(), true)))
+                        .then(literal("show").executes(ctx -> tracers(ctx.getSource(), false)))
+                        .then(literal("clear").executes(ctx -> {
+                            io.github.liangforstudy.entitytracker.trace.Tracers.clear();
+                            ctx.getSource().sendFeedback(Component.translatable("screen.entitytracker.tracers.cleared"));
+                            return 1;
+                        })))
                 .then(literal("trades").executes(ctx -> {
                     OpenTriggers.openLater(new io.github.liangforstudy.entitytracker.gui.TradesScreen());
                     return 1;
