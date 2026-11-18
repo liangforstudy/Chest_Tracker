@@ -1,5 +1,8 @@
 package io.github.liangforstudy.entitytracker.gui;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.liangforstudy.entitytracker.StreamerMode;
 import io.github.liangforstudy.entitytracker.trace.Tracers;
@@ -25,6 +28,22 @@ import org.lwjgl.glfw.GLFW;
 public final class OpenTriggers {
     private OpenTriggers() {}
 
+    /** The mod's keys in the order the settings screen lists them (filled by register()). */
+    private static final List<KeyMapping> KEYS = new ArrayList<>();
+
+    public static List<KeyMapping> keys() {
+        return KEYS;
+    }
+
+    /**
+     * The key's name as shown to the player. The game names number-pad keys like the top-row ones
+     * ("5"), so those say "Keypad 5" instead.
+     */
+    public static Component keyName(KeyMapping key) {
+        String id = key.saveString();
+        return id.startsWith("key.keyboard.keypad.") ? Component.translatable(id) : key.getTranslatedKeyMessage();
+    }
+
     public static void register() {
         KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("entitytracker", "main"));
         KeyMapping open = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.entitytracker.open",
@@ -41,6 +60,7 @@ public final class OpenTriggers {
         // Unbound: hides absolute coordinates everywhere (also /etracker streamer).
         KeyMapping streamer = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.entitytracker.toggle_streamer",
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
+        KEYS.addAll(List.of(open, openAlt, trades, toggleTracers, streamer));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (toggleTracers.consumeClick()) {
                 Tracers.toggle();
@@ -77,7 +97,7 @@ public final class OpenTriggers {
      */
     private static Component openTooltip(KeyMapping... keys) {
         java.util.List<Component> bound = new java.util.ArrayList<>();
-        for (KeyMapping k : keys) if (!k.isUnbound()) bound.add(k.getTranslatedKeyMessage());
+        for (KeyMapping k : keys) if (!k.isUnbound()) bound.add(keyName(k));
         return switch (bound.size()) {
             case 0 -> Component.translatable("screen.entitytracker.open_button");
             case 1 -> Component.translatable("screen.entitytracker.open_button.key", bound.get(0));
