@@ -5,6 +5,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,3 +29,12 @@ jobs:
             versions/*/build/libs/*.jar
             build/libs/*.jar
           if-no-files-found: warn
+      # Jars also pushed to the ci-builds branch, for places that can reach git but not artifact storage.
+      - name: Publish jars to ci-builds branch
+        if: github.event_name == 'push'
+        run: |
+          mkdir /tmp/out && cp versions/*/build/libs/*.jar /tmp/out/
+          cd /tmp/out && git init -q -b ci-builds
+          git config user.name github-actions && git config user.email github-actions@users.noreply.github.com
+          git add -A && git commit -q -m "Jars from ${GITHUB_SHA} (${GITHUB_REF_NAME})"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" ci-builds
