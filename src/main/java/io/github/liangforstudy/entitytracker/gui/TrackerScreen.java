@@ -104,7 +104,8 @@ public final class TrackerScreen extends Screen {
      * The grid: every item the memory holds at a glance, one slot per item type with its total
      * (shulker and bundle contents counted, see {@link Tally}). Tapping one lists where it is.
      */
-    private boolean gridView;
+    /** The grid is the first thing shown (user's choice); List shows containers. */
+    private boolean gridView = true;
     private Button gridButton;
     private List<GridCell> grid = List.of();
     private int gridScroll, gridMaxScroll, gridBottom, gridRevision = -1;
@@ -711,6 +712,21 @@ public final class TrackerScreen extends Screen {
         return String.format(Locale.ROOT, "%.1fM", n / 1_000_000.0);
     }
 
+    /**
+     * The count in a slot's bottom-right corner like the game's own, but shrunk when it's wider
+     * than the slot ("7205", "158k"), so it never runs into the next slot.
+     */
+    private void drawCount(GuiGraphics context, String text, int x, int y) {
+        int w = font.width(text);
+        float scale = w <= 17 ? 1f : 17f / w;
+        var pose = context.pose();
+        pose.pushMatrix();
+        pose.translate(x + 17, y + 17);
+        pose.scale(scale, scale);
+        context.drawString(font, text, -w, -font.lineHeight + 1, 0xFFFFFFFF, true);
+        pose.popMatrix();
+    }
+
     private void renderGrid(GuiGraphics context, int mouseX, int mouseY) {
         int cols = gridColumns();
         int left = (width - cols * CELL) / 2;
@@ -726,7 +742,8 @@ public final class TrackerScreen extends Screen {
             GridCell cell = grid.get(i);
             context.fill(x, y, x + 18, y + 18, i == hovered ? 0x60FFFFFF : 0x28FFFFFF);
             context.renderItem(cell.stack(), x + 1, y + 1);
-            context.renderItemDecorations(font, cell.stack(), x + 1, y + 1, shortCount(cell.shown()));
+            context.renderItemDecorations(font, cell.stack(), x + 1, y + 1, ""); // durability bar etc., no count
+            drawCount(context, shortCount(cell.shown()), x + 1, y + 1);
         }
         context.disableScissor();
         if (gridMaxScroll > 0) {

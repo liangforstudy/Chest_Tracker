@@ -87,9 +87,9 @@ updating, since older versions may not read the newer memory format.
   own page. Mod Menu is optional: the keys are in Controls anyway, and every other setting has a
   command.
 - **Two open keys.** **K** and **Numpad 5** both open the tracker; rebind either in Controls.
-- **Grid.** The **Grid** button shows everything the memory holds at a glance: one slot per kind
+- **Grid.** The tracker opens on a grid of everything the memory holds, at a glance: one slot per kind
   of item with its total, most first, shulker and bundle contents counted. Typing in the search
-  narrows it; tap an item to list where it is. Items in containers that may be gone are left out
+  narrows it; tap an item to list where it is, or press **List** for the containers themselves. Items in containers that may be gone are left out
   of the grid's totals until you press **Destroyed: hidden** to add them.
 - **Tracers.** Pick containers (**Trace** in a row's menu or the detail view, or select several and
   **Trace**) and lines go from your crosshair to each one, through walls, with an outline and a
@@ -168,7 +168,8 @@ updating, since older versions may not read the newer memory format.
 ## Usage
 
 - Press **K** (rebindable in Controls), the **ET** button in your inventory, or type `/etracker` to
-  open the tracker. Type to search, click a result for its detail view, right-click a row (or tap
+  open the tracker. It opens on the grid of everything remembered; **List** switches to the
+  containers. Type to search, click a result for its detail view, right-click a row (or tap
   its **⋮**) for actions. The detail view scrolls (mouse wheel, or drag) when it doesn't fit, for
   example a double chest at a large GUI scale. The inventory key (**E**, or whatever you bound it
   to) works like Esc on the tracker's screens, except while you're typing in the search box.
