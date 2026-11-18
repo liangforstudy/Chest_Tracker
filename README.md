@@ -171,6 +171,9 @@ The jars end up in `versions/<minecraft version>/build/libs/` (1.21.11 and, in p
 [PORTING-26.2.md](PORTING-26.2.md)). The project uses
 [Stonecutter](https://stonecutter.kikugie.dev/) and Mojang's official mappings.
 
+How it's tested, the test plan with the latest results, and the test setups (datapack, lag proxy,
+a stress memory) are in [TESTING.md](TESTING.md) and `testing/`.
+
 ## Credits
 
 Inspired by [Chest Tracker](https://modrinth.com/mod/chest-tracker-port); this is a separate mod,
