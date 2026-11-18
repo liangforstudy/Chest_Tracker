@@ -29,6 +29,8 @@ updating, since older versions may not read the newer memory format.
 
 ## Features
 
+### What it remembers
+
 - **Entity containers that move.** Entities are remembered by UUID, not position, so a donkey you
   lead away or a minecart you push stays the same record. The mod recognises them on sight when
   you come back.
@@ -52,11 +54,28 @@ updating, since older versions may not read the newer memory format.
 - **Ender chests per account.** If you play several accounts on one server, each account's ender
   chest is remembered separately and all of them are searchable, so you know which account to
   switch to.
+- **Villager trades.** Trade with a villager or wandering trader and its offers are remembered:
+  price, second price, what it sells, uses left. Search them in their own **Trades** screen (the
+  **Trades** tab at the top of the tracker screen), kept apart from your storage: "mending" finds every librarian selling it.
+  Villagers are followed like donkeys when they wander. Prices and stock show as last seen (another
+  player may have traded since; opening the villager again gets the real numbers), with
+  what changed since your previous look (price up or down, new offers, offers gone), and each
+  account keeps its own prices, since reputation and discounts are per player. A villager seen
+  with a higher level or another profession is flagged, as its offers are out of date. Wandering
+  traders can be hidden all at once, or put in the trash one by one when they've moved on.
+
+### Finding things
+
 - **Deep search.** Item names, custom names, lore, enchantments (modded and datapack ones too),
   player heads by profile name or texture, and items inside shulkers and bundles, with the full path
   (`Donkey "Pack" > Shulker "Tools" > Diamond Pickaxe`). Typos are forgiven: when nothing matches
   exactly, close matches are shown and marked as such ("dimond" finds diamonds). Results appear
   as they're found, nearest first, so on a big base the closest ones show up straight away.
+- **Several items at once.** Separate them with commas or semicolons: `obby, echest` lists
+  obsidian and ender chests together, each term with its own aliases and typo tolerance. Item
+  names come first, then items that only match in their details (enchantments, lore, custom
+  names), so `fire` shows Fire Charges before Fire Aspect swords. `/search` and the tally work the
+  same way.
 - **"On <your name>".** Your own inventory (and the shulkers and bundles in it) is searched too, listed first,
   so the sword you're looking for doesn't hide in your inventory.
 - **Tally.** How many of an item you have across the whole memory: type "totems" or "enchanted
@@ -66,31 +85,27 @@ updating, since older versions may not read the newer memory format.
   what you have most of. Players' words work too (gapple, egap, pearls, xp), and you can add your
   own in `item-aliases.json`. A tally file is written beside the memory for scripts and bots to
   read with the game closed; see [TALLY.md](TALLY.md).
-- **Several items at once.** Separate them with commas or semicolons: `obby, echest` lists
-  obsidian and ender chests together, each term with its own aliases and typo tolerance. Item
-  names come first, then items that only match in their details (enchantments, lore, custom
-  names), so `fire` shows Fire Charges before Fire Aspect swords. `/search` and the tally work the
-  same way.
+- **Grid.** The tracker opens on a grid of everything the memory holds, at a glance: one slot per kind
+  of item with its total, most first, shulker and bundle contents counted. Typing in the search
+  narrows it; tap an item to list where it is, or press **List** for the containers themselves.
+  Items in containers that may be gone are left out of the grid's totals until you press
+  **Destroyed: hidden** to add them.
 - **Sort by age.** The **Sort** button switches between nearest first, last opened (opened longest
   ago first: the contents most likely out of date, to re-check), and last seen, oldest or newest
   first.
+- **Detail view.** Click any result to see the container's last known contents as an inventory
+  grid, with the matching items outlined. Tap a shulker or bundle to look inside it, or a book to
+  read it. Donkeys, mules and llamas are laid out like their own screen: saddle (or carpet), a
+  picture of the animal, then the chest. Copy the
+  coordinates as `x y z`, or as `x z` for Baritone goals.
 - **Found items outlined in the real container.** Pick a search result, then open that container
   in the world: the items you searched for (and shulkers or bundles holding them) are outlined.
-- **Streamer mode.** `/etracker streamer` (or the **Toggle streamer mode** key) hides absolute
-  coordinates everywhere and shows distances only, so a livestream can't give your base away.
-  While it's on, **Copy x y z** and **Copy x z** leave the clipboard alone too (a paste on stream
-  would show them); `/etracker streamer allowclipboard true` lets them copy again, and a bare
-  `/etracker streamer allowclipboard` goes back to blocking.
-- **Settings.** With [Mod Menu](https://modrinth.com/mod/modmenu) installed, the mod's configure
-  button opens its settings: **Keys...** opens Controls > Key Binds at this mod's section (open
-  tracker K, second key Keypad 5, trades, tracers, streamer mode), and **Streamer mode...** has its
-  own page. Mod Menu is optional: the keys are in Controls anyway, and every other setting has a
-  command.
-- **Two open keys.** **K** and **Numpad 5** both open the tracker; rebind either in Controls.
-- **Grid.** The tracker opens on a grid of everything the memory holds, at a glance: one slot per kind
-  of item with its total, most first, shulker and bundle contents counted. Typing in the search
-  narrows it; tap an item to list where it is, or press **List** for the containers themselves. Items in containers that may be gone are left out
-  of the grid's totals until you press **Destroyed: hidden** to add them.
+- **Across dimensions.** A Nether stash seen from the overworld shows where it lines up
+  (`Nether (30, 99, 25) ≈ 244, 204 here`), and results are sorted by that distance. The scale comes
+  from each dimension's own settings, so modded dimensions work too; the End isn't converted.
+
+### Getting there
+
 - **Tracers.** Pick containers (**Trace** in a row's menu or the detail view, or select several and
   **Trace**) and lines go from your crosshair to each one, through walls, with an outline and a
   label ("Chest · 46 m"). A donkey or minecart near you is followed as it moves; one that isn't
@@ -102,14 +117,9 @@ updating, since older versions may not read the newer memory format.
   `show`, or `clear` to forget them). Drawn on your
   screen only; nothing is sent to the server. Some servers ban anything called tracers, whatever
   it points at: check the rules.
-- **Detail view.** Click any result to see the container's last known contents as an inventory
-  grid, with the matching items outlined. Tap a shulker or bundle to look inside it, or a book to
-  read it. Donkeys, mules and llamas are laid out like their own screen: saddle (or carpet), a
-  picture of the animal, then the chest. Copy the
-  coordinates as `x y z`, or as `x z` for Baritone goals.
-- **Across dimensions.** A Nether stash seen from the overworld shows where it lines up
-  (`Nether (30, 99, 25) ≈ 244, 204 here`), and results are sorted by that distance. The scale comes
-  from each dimension's own settings, so modded dimensions work too; the End isn't converted.
+
+### Knowing what's still true
+
 - **Honest about what it knows.** The client can't see what happens to a container while you're
   away, so the mod tells you what it noticed and leaves the decision to you:
   - **destroyed** (or **picked up** for a shulker box): a block container that's gone is certain
@@ -130,19 +140,34 @@ updating, since older versions may not read the newer memory format.
   thinks so; on a touch screen, use **Show warnings** in the row's menu. The detail view always
   shows the explanations. All texts live in `assets/entitytracker/lang/en_us.json`, so a resource
   pack can reword them.
-- **Villager trades.** Trade with a villager or wandering trader and its offers are remembered:
-  price, second price, what it sells, uses left. Search them in their own **Trades** screen (the
-  **Trades** tab at the top of the tracker screen), kept apart from your storage: "mending" finds every librarian selling it.
-  Villagers are followed like donkeys when they wander. Prices and stock show as last seen (another
-  player may have traded since; opening the villager again gets the real numbers), with
-  what changed since your previous look (price up or down, new offers, offers gone), and each
-  account keeps its own prices, since reputation and discounts are per player. A villager seen
-  with a higher level or another profession is flagged, as its offers are out of date. Wandering
-  traders can be hidden all at once, or put in the trash one by one when they've moved on.
 - **Trash for the cases it can't judge.** Mark single entries, a selection (Ctrl/Shift-click, or
   the **Select** button on touch screens) or a whole area destroyed (after a grief, say), with
   restore and undo. **Trash (N)** opens one trash with three views, **Entities**, **Trades** and
   **Blocks**, so broken blocks don't bury the entities and traders you trashed.
+- **High-ping aware.** Contents are only attributed to a container you actually clicked, matched in
+  order and by name, so two minecarts clicked quickly on a laggy server each get their own
+  contents. How long a click waits for its screen follows the measured lag (at least 3 seconds,
+  up to 20), so screens that take several seconds to arrive are still recorded. Closing a screen
+  before its contents arrive never overwrites what was remembered.
+
+### Settings and privacy
+
+- **Streamer mode.** `/etracker streamer` (or the **Toggle streamer mode** key) hides absolute
+  coordinates everywhere and shows distances only, so a livestream can't give your base away.
+  While it's on, **Copy x y z** and **Copy x z** leave the clipboard alone too (a paste on stream
+  would show them); `/etracker streamer allowclipboard true` lets them copy again, and a bare
+  `/etracker streamer allowclipboard` goes back to blocking.
+- **Settings.** With [Mod Menu](https://modrinth.com/mod/modmenu) installed, the mod's configure
+  button opens its settings: **Keys...** opens Controls > Key Binds at this mod's section (open
+  tracker K, second key Keypad 5, trades, tracers, streamer mode), and **Streamer mode...** has its
+  own page. Mod Menu is optional: the keys are in Controls anyway, and every other setting has a
+  command.
+- **Two open keys.** **K** and **Keypad 5** both open the tracker; rebind either in Controls.
+- **Touch-friendly.** Works on PojavLauncher: every action is reachable without a keyboard or
+  right-click.
+
+### Storage
+
 - **Safe storage.** Memory is saved per server under `<game dir>/entity-tracker/`, outside
   `config/`, with atomic writes and daily backups. The file is small: each distinct item stack is
   saved once however many copies you have (a real 9b9t memory went from 9.6 MB to 0.9 MB), while
@@ -157,13 +182,6 @@ updating, since older versions may not read the newer memory format.
   the memory in an older version by accident leaves the newer items exactly as they are (shown by
   item type until you reopen those containers), keeps a copy of the file in
   `backups/<server>/from-newer-versions/`, and says so in chat.
-- **High-ping aware.** Contents are only attributed to a container you actually clicked, matched in
-  order and by name, so two minecarts clicked quickly on a laggy server each get their own
-  contents. How long a click waits for its screen follows the measured lag (at least 3 seconds,
-  up to 20), so screens that take several seconds to arrive are still recorded. Closing a screen
-  before its contents arrive never overwrites what was remembered.
-- **Touch-friendly.** Works on PojavLauncher: every action is reachable without a keyboard or
-  right-click.
 
 ## Usage
 
