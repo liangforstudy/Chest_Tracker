@@ -56,8 +56,14 @@ as they get built, and get added or removed as plans change. For what works toda
 ## Planned
 
 - **Singleplayer world scan:** on joining a singleplayer world, read every container in its save
-  in the background (no radius limit, loot chests nobody opened are skipped), so the whole world
-  is searchable without opening each chest
+  in the background, so the whole world is searchable without opening each chest
+  - only the world you're playing, read from its own save files; nothing is loaded into the world
+  - chests, barrels, shulker boxes and the other containers the mod tracks, plus donkeys,
+    minecarts and chest boats, with everything nested inside
+  - no radius limit; loot chests nobody has opened yet (no items until opened) are skipped
+  - picks up where it stopped if you leave mid-scan; each chunk is read once, and later changes
+    reach the memory the usual way, when you open or see those containers
+  - scanned containers are marked as such; opening one replaces its scanned contents
 - In-world area selection box that works with freecam, and Litematica selections
 - Search filters (`@ench:mending`, `@in:donkey`, `@here`, ...)
 - Tracers, more: colours you can pick, an outline glow on traced animals and minecarts, labels
