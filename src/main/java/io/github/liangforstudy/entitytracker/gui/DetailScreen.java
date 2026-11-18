@@ -113,7 +113,7 @@ public final class DetailScreen extends Screen {
                     ? Component.translatable("screen.entitytracker.restore") : TrackerScreen.markLabel(record), b -> toggleTrash())
                     .build());
         }
-        buttons.add(Button.builder(CommonComponents.GUI_DONE, b -> minecraft.setScreen(null)).build());
+        buttons.add(Button.builder(Component.translatable("screen.entitytracker.exit"), b -> minecraft.setScreen(null)).build());
         viewBottom = ButtonBar.layout(buttons, font, width, height, 100) - 4;
         for (Button b : buttons) addRenderableWidget(b);
     }

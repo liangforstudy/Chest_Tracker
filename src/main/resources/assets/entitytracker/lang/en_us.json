@@ -5,6 +5,7 @@
   "screen.entitytracker.tab.storage": "Storage",
   "screen.entitytracker.tab.trades": "Trades",
   "screen.entitytracker.search": "Search items, names, enchantments...",
+  "screen.entitytracker.exit": "Exit ETracker screen",
   "screen.entitytracker.open_button": "Open Entity Container Tracker",
   "screen.entitytracker.open_button.key": "Open Entity Container Tracker (or press \"%s\" to open it as well)",
   "screen.entitytracker.open_button.keys": "Open Entity Container Tracker (or press \"%s\" or \"%s\" to open it as well)",

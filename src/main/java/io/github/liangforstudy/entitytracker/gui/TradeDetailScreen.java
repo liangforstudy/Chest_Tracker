@@ -68,7 +68,7 @@ public final class TradeDetailScreen extends Screen {
                 Button.builder(record.isTrashed()
                         ? Component.translatable("screen.entitytracker.restore") : TrackerScreen.markLabel(record), b -> toggleTrash())
                         .build(),
-                Button.builder(CommonComponents.GUI_DONE, b -> minecraft.setScreen(null)).build());
+                Button.builder(Component.translatable("screen.entitytracker.exit"), b -> minecraft.setScreen(null)).build());
         int buttonsTop = ButtonBar.layout(buttons, font, width, height, 100);
 
         int listY = 22 + header.size() * 11 + 6;

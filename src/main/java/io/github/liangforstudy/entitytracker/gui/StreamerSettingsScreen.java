@@ -32,8 +32,9 @@ public final class StreamerSettingsScreen extends Screen {
                 })
                 .tooltip(Tooltip.create(Component.translatable("screen.entitytracker.settings.clipboard.tip")))
                 .bounds(x, y + 24, w, 20).build());
-        addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, b -> onClose())
-                .bounds(width / 2 - 50, height - 28, 100, 20).build());
+        // Leaves the settings altogether (Esc goes back one page).
+        addRenderableWidget(Button.builder(Component.translatable("screen.entitytracker.exit"), b -> parent.onClose())
+                .bounds(width / 2 - 75, height - 28, 150, 20).build());
     }
 
     private static Component streamerLabel() {

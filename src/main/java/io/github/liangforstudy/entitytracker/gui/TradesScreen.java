@@ -91,7 +91,7 @@ public final class TradesScreen extends Screen {
                     layoutBar();
                     refresh();
                 }).build(),
-                Button.builder(CommonComponents.GUI_DONE, b -> onClose()).build());
+                Button.builder(Component.translatable("screen.entitytracker.exit"), b -> onClose()).build());
         menu.clear();
         for (Button b : bar) addRenderableWidget(b);
         layoutBar();

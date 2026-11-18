@@ -230,7 +230,7 @@ public final class TrackerScreen extends Screen {
             selectMode = true;
             updateBar();
         }).build());
-        doneButton = addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, b -> onClose()).build());
+        doneButton = addRenderableWidget(Button.builder(Component.translatable("screen.entitytracker.exit"), b -> onClose()).build());
         bulkPrimary = addRenderableWidget(Button.builder(Component.empty(), b -> bulkPrimary()).build());
         bulkDelete = addRenderableWidget(Button.builder(Component.empty(), b -> bulkDelete()).build());
         bulkTrace = addRenderableWidget(Button.builder(Component.empty(), b -> {

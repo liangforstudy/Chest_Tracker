@@ -39,8 +39,8 @@ public final class SettingsScreen extends Screen {
                         b -> minecraft.setScreen(new StreamerSettingsScreen(this)))
                 .tooltip(Tooltip.create(Component.translatable("screen.entitytracker.settings.streamer.tip")))
                 .bounds(x, y + 24, w, 20).build());
-        addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, b -> onClose())
-                .bounds(width / 2 - 50, height - 28, 100, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("screen.entitytracker.exit"), b -> onClose())
+                .bounds(width / 2 - 75, height - 28, 150, 20).build());
     }
 
     /** Opens Options > Controls > Key Binds scrolled so this mod's section heads the list. */
