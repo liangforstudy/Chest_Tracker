@@ -32,6 +32,8 @@ public final class MemoryBank {
      * days, so time away from the server doesn't age anything.
      */
     public final TreeSet<String> playDays = new TreeSet<>();
+    /** Each account's inventory as last seen (see {@link InventoryRecord}), by account. */
+    public final Map<UUID, InventoryRecord> inventories = new LinkedHashMap<>();
     /** The account currently playing, or null before one has joined. */
     public @Nullable UUID currentPlayer;
     private final Map<UUID, EntityRecord> entities = new LinkedHashMap<>();
@@ -177,6 +179,26 @@ public final class MemoryBank {
     /** Storage only: every record except villagers and wandering traders. */
     public Stream<ContainerRecord> containers() {
         return allRecords().filter(r -> !(r instanceof EntityRecord e && e.isTrader()));
+    }
+
+    /** The stored inventories of the accounts not playing now (the one playing is shown live). */
+    public Stream<InventoryRecord> otherInventories() {
+        return inventories.values().stream().filter(r -> r.owner != null && !r.owner.equals(currentPlayer));
+    }
+
+    /**
+     * Keeps the playing account's inventory up to date in the memory: a new copy only when the
+     * items changed. Returns true if it changed.
+     */
+    public boolean rememberInventory(InventoryRecord live) {
+        if (live.owner == null) return false;
+        InventoryRecord stored = inventories.get(live.owner);
+        if (stored != null && stored.items.equals(live.items)) return false;
+        InventoryRecord copy = live.storedCopy();
+        if (stored != null) copy.firstSeen = stored.firstSeen;
+        inventories.put(live.owner, copy);
+        markDirty();
+        return true;
     }
 
     /** Villagers and wandering traders (CLAUDE.md 4.11). */

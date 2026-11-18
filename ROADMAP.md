@@ -16,8 +16,8 @@ as they get built, and get added or removed as plans change. For what works toda
   home-area rule
 - Book tracking: written books and books and quills searchable by title, author and page text, a
   reader in the detail view, and large books (100 full pages) saved once per distinct book
-- One memory per server shared by all your accounts, server address aliases, safe saving with
-  backups
+- One memory per server shared by all your accounts (ender chests and inventories kept per
+  account), server address aliases, safe saving with backups
 - Search: names, lore, enchantments, player heads and textures (with aliases), items nested in
   shulkers and bundles, your own inventory ("On <your name>")
 - Tracker screen, detail view with contents grid, coordinates converted between dimensions

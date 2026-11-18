@@ -219,6 +219,8 @@ public final class BankStorage {
                 for (EntityRecord r : other.all()) bank.mergeEntity(r);
                 for (BlockRecord r : other.allBlocks()) bank.mergeBlock(r);
                 other.accounts.forEach(bank.accounts::putIfAbsent);
+                other.inventories.forEach((owner, inv) -> bank.inventories.merge(owner, inv,
+                        (mine, theirs) -> mine.lastOpened >= theirs.lastOpened ? mine : theirs));
                 bank.playDays.addAll(other.playDays);
                 Path kept = file.resolveSibling(aliasKey + ".json.merged-into-" + key + "-"
                         + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")));
@@ -329,7 +331,8 @@ public final class BankStorage {
     private @Nullable String checkVersions(MemoryBank bank, String key, @Nullable Path file) {
         int upgraded = 0;
         long newer = 0;
-        for (ContainerRecord r : bank.allRecords().toList()) {
+        for (ContainerRecord r : java.util.stream.Stream.concat(bank.allRecords(),
+                bank.inventories.values().stream()).toList()) {
             upgraded += r.upgradeItems();
             newer += r.newerItems();
             if (r instanceof EntityRecord e && e.trades != null) {
@@ -408,6 +411,12 @@ public final class BankStorage {
                 bank.putBlock(r);
             }
         }
+        if (root.has("inventories")) {
+            for (JsonElement e : root.getAsJsonArray("inventories")) {
+                InventoryRecord r = InventoryRecord.fromJson(e.getAsJsonObject());
+                if (r.owner != null) bank.inventories.put(r.owner, r);
+            }
+        }
         if (root.has("playDays")) {
             for (JsonElement e : root.getAsJsonArray("playDays")) bank.playDays.add(e.getAsString());
         }
@@ -446,6 +455,9 @@ public final class BankStorage {
         JsonArray blocks = new JsonArray();
         for (BlockRecord r : bank.allBlocks()) blocks.add(r.toJson());
         root.add("blocks", blocks);
+        JsonArray inventories = new JsonArray();
+        for (InventoryRecord r : bank.inventories.values()) inventories.add(r.toJson());
+        root.add("inventories", inventories);
         JsonArray lastArea = new JsonArray();
         for (String k : bank.lastAreaAction()) lastArea.add(k);
         root.add("lastAreaAction", lastArea);

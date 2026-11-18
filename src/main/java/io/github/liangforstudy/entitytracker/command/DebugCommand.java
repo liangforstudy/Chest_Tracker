@@ -326,10 +326,12 @@ public final class DebugCommand {
         String dimension = world == null ? "" : world.dimension().identifier().toString();
         int hits = 0;
         List<ContainerRecord> records = java.util.stream.Stream.concat(
-                        java.util.stream.Stream.ofNullable(InventoryRecord.current()), // "On me" first
+                        java.util.stream.Stream.concat(java.util.stream.Stream.ofNullable(InventoryRecord.current()), // "On me" first
+                                bank.otherInventories()), // other accounts, as last seen
                         bank.containers().filter(r -> !r.isTrashed()))
                 .filter(r -> radius <= 0 || (player != null && r.dimension.equals(dimension)
                         && !(r instanceof BlockRecord b && b.global)
+                        && !(r instanceof InventoryRecord inv && !inv.live)
                         && player.distanceToSqr(r.x, r.y, r.z) <= (double) radius * radius))
                 .sorted(Comparator.comparingDouble(r -> player == null ? 0 : player.distanceToSqr(r.x, r.y, r.z)))
                 .toList();

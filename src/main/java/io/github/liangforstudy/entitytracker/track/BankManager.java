@@ -4,6 +4,7 @@ import io.github.liangforstudy.entitytracker.EntityTrackerClient;
 import io.github.liangforstudy.entitytracker.Settings;
 import io.github.liangforstudy.entitytracker.data.BankStorage;
 import io.github.liangforstudy.entitytracker.data.BlockRecord;
+import io.github.liangforstudy.entitytracker.data.InventoryRecord;
 import io.github.liangforstudy.entitytracker.data.MemoryBank;
 import io.github.liangforstudy.entitytracker.gui.Messages;
 import io.github.liangforstudy.entitytracker.search.TallyReport;
@@ -64,6 +65,11 @@ public final class BankManager {
         if (bank == null && loading == null && client.player != null && client.level != null) startLoading(client);
         if (loading != null && loading.isDone() && client.player != null) open(client);
         if (bank != null && ++ticks % 1200 == 0) bank.markPlayedToday(); // also catches playing past midnight
+        // The playing account's inventory, kept in the memory for the other accounts to search.
+        if (bank != null && ticks % 40 == 0 && client.player != null) {
+            InventoryRecord live = InventoryRecord.current();
+            if (live != null) bank.rememberInventory(live);
+        }
         if (bank != null && bank.tickDebounce(Settings.saveDebounceTicks)) saveInBackground();
         if (pendingWarning != null && client.player != null) {
             Messages.chat(Component.literal(pendingWarning).withStyle(ChatFormatting.RED));
@@ -141,6 +147,8 @@ public final class BankManager {
     /** On disconnect: save in the background (the next load waits for it in the same queue). */
     public void close() {
         if (bank != null) {
+            InventoryRecord live = InventoryRecord.current(); // null once the player is gone
+            if (live != null) bank.rememberInventory(live);
             if (bank.isDirty()) saveInBackground();
             EntityTrackerClient.LOGGER.info("Closed bank {}", bank.key);
         }

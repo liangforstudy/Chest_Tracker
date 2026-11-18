@@ -844,6 +844,7 @@ public final class TrackerScreen extends Screen {
         // Your own inventory first, so "it was on me all along" is the first thing you see.
         InventoryRecord onMe = trashView ? null : InventoryRecord.current();
         if (onMe != null) records.add(onMe);
+        if (!trashView) bank.otherInventories().forEach(records::add); // other accounts, as last seen
         Stream<? extends ContainerRecord> shown = trashView ? trashKind.trashed(bank)
                 : bank.containers().filter(r -> !r.isTrashed() && (showDestroyed || r.status != RecordStatus.LIKELY_DESTROYED));
         Comparator<ContainerRecord> order = switch (sort) {
@@ -1221,7 +1222,12 @@ public final class TrackerScreen extends Screen {
     public static String where(ContainerRecord r) {
         Minecraft client = Minecraft.getInstance();
         List<String> parts = new ArrayList<>();
-        if (r instanceof InventoryRecord) return Component.translatable("screen.entitytracker.on_me_where").getString();
+        if (r instanceof InventoryRecord inv) {
+            if (inv.live) return Component.translatable("screen.entitytracker.on_me_where").getString();
+            // Another account's: which account to switch to, and how old the copy is.
+            return Component.translatable("screen.entitytracker.other_account", inv.name).getString() + " · "
+                    + Component.translatable("screen.entitytracker.seen_ago", age(inv.lastSeen)).getString();
+        }
         if (r instanceof BlockRecord block && block.global) {
             // Ender chest: no place or status. Another account's says which account to switch to.
             MemoryBank bank = EntityTrackerClient.banks().bank();

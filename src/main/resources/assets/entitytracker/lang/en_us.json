@@ -80,6 +80,7 @@
   "screen.entitytracker.tally.together": "%s kinds: %s in storage",
   "screen.entitytracker.tally.ender": "%s in ender chests",
   "screen.entitytracker.tally.on_you": "%s on you",
+  "screen.entitytracker.tally.other_accounts": "%s on other accounts",
   "screen.entitytracker.tally.maybe_gone": "%s more in containers that may be gone",
   "screen.entitytracker.tally.top": "Most items, in %s remembered containers:",
   "screen.entitytracker.restore": "Restore",

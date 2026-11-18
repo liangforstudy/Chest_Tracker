@@ -449,7 +449,7 @@ public final class DetailScreen extends Screen {
     private List<String> infoLines() {
         List<String> lines = new ArrayList<>();
         if (record instanceof InventoryRecord) {
-            lines.add(Component.translatable("screen.entitytracker.on_me_where").getString());
+            lines.add(TrackerScreen.where(record));
             return lines;
         }
         if (record instanceof BlockRecord b && b.global) {

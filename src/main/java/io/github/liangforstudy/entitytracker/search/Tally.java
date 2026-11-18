@@ -37,6 +37,8 @@ public final class Tally {
     public static final class Count {
         public long total;
         public long enderChests;
+        /** In the stored inventories of the accounts not playing now. */
+        public long onOtherAccounts;
         public long maybeGone;
         /** Containers holding it, nested shulkers not counted separately. */
         public int containers;
@@ -99,6 +101,20 @@ public final class Tally {
                 }
                 c.total += n;
                 if (ender) c.enderChests += n;
+                c.containers++;
+            });
+        }
+        // Other accounts' inventories as last seen, like their ender chests (the playing account's
+        // own inventory is counted live, as "on you").
+        for (ContainerRecord r : bank.otherInventories().toList()) {
+            Map<String, Long> counts = new HashMap<>();
+            for (ContainerRecord.SlotItem slot : r.items) {
+                countStack(slot.stack()).forEach((id, n) -> counts.merge(id, n, Long::sum));
+            }
+            counts.forEach((id, n) -> {
+                Count c = items.computeIfAbsent(id, k -> new Count());
+                c.total += n;
+                c.onOtherAccounts += n;
                 c.containers++;
             });
         }

@@ -41,6 +41,7 @@ rename), so a reader never sees half a file.
       "total": 214,
       "containers": 12,
       "enderChests": 64,
+      "onOtherAccounts": 10,
       "onPlayer": 3,
       "maybeGone": 27
     }
@@ -55,7 +56,8 @@ rename), so a reader never sees half a file.
 - `format`: 1. A reader should refuse a format it doesn't know; new fields may be added
   without changing it.
 - `items`: every item id the memory or the player has, most plentiful first. `total` includes
-  `enderChests`; `onPlayer` and `maybeGone` are extra. `containers` is how many containers
+  `enderChests` and `onOtherAccounts` (what your other accounts carried when last played);
+  `onPlayer` and `maybeGone` are extra. `containers` is how many containers
   hold it (a shulker inside a chest is part of that chest). `name` is in the game's `language`.
 - `aliases`: the player's words for items, from `entity-tracker/item-aliases.json`, with `*`
   patterns already expanded to the ids that exist. Keys are lowercase and singular.

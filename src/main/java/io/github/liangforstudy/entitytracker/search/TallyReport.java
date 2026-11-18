@@ -80,25 +80,27 @@ public final class TallyReport {
                 ? Component.translatable("screen.entitytracker.tally.none_stored", name)
                 : Component.translatable(c.containers == 1 ? "screen.entitytracker.tally.count_one" : "screen.entitytracker.tally.count",
                         name, c.total, c.containers);
-        return withExtras(head, c.enderChests, carried, c.maybeGone);
+        return withExtras(head, c.enderChests, c.onOtherAccounts, carried, c.maybeGone);
     }
 
     /** "3 kinds: 120 in storage · ..." for several items at once. */
     private static Component together(List<String> ids, Tally tally, Map<String, Long> onYou) {
-        long total = 0, ender = 0, carried = 0, maybeGone = 0;
+        long total = 0, ender = 0, accounts = 0, carried = 0, maybeGone = 0;
         for (String id : ids) {
             Tally.Count c = tally.get(id);
             total += c.total;
             ender += c.enderChests;
+            accounts += c.onOtherAccounts;
             maybeGone += c.maybeGone;
             carried += onYou.getOrDefault(id, 0L);
         }
-        return withExtras(Component.translatable("screen.entitytracker.tally.together", ids.size(), total), ender, carried, maybeGone);
+        return withExtras(Component.translatable("screen.entitytracker.tally.together", ids.size(), total), ender, accounts, carried, maybeGone);
     }
 
-    private static Component withExtras(Component head, long ender, long carried, long maybeGone) {
+    private static Component withExtras(Component head, long ender, long accounts, long carried, long maybeGone) {
         var out = Component.empty().append(head);
         if (ender > 0) out.append(" · ").append(Component.translatable("screen.entitytracker.tally.ender", ender));
+        if (accounts > 0) out.append(" · ").append(Component.translatable("screen.entitytracker.tally.other_accounts", accounts));
         if (carried > 0) out.append(" · ").append(Component.translatable("screen.entitytracker.tally.on_you", carried));
         if (maybeGone > 0) out.append(" · ").append(Component.translatable("screen.entitytracker.tally.maybe_gone", maybeGone));
         return out;
@@ -142,6 +144,7 @@ public final class TallyReport {
                     o.addProperty("total", c.total);
                     o.addProperty("containers", c.containers);
                     o.addProperty("enderChests", c.enderChests);
+                    o.addProperty("onOtherAccounts", c.onOtherAccounts);
                     o.addProperty("onPlayer", onYou.getOrDefault(id, 0L));
                     o.addProperty("maybeGone", c.maybeGone);
                     items.add(id, o);

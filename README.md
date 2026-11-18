@@ -51,9 +51,11 @@ updating, since older versions may not read the newer memory format.
   wherever they are (in shulkers, bundles, on lecterns and in chiseled bookshelves). Tap a book in
   the detail view to read it. Built for big ones: a 100-page book is saved once however many
   copies you have, and searching its pages never stalls the game.
-- **Ender chests per account.** If you play several accounts on one server, each account's ender
-  chest is remembered separately and all of them are searchable, so you know which account to
-  switch to.
+- **Ender chests and inventories per account.** If you play several accounts on one server, each
+  account's ender chest and inventory (armour, offhand, and the shulkers and bundles carried) are
+  remembered separately and all of them are searchable, so you know which account to switch to.
+  Another account's inventory shows as it was when you last played it ("On Alt · on account Alt
+  · seen 2d ago"), and counts in the tally as "on other accounts".
 - **Villager trades.** Trade with a villager or wandering trader and its offers are remembered:
   price, second price, what it sells, uses left. Search them in their own **Trades** screen (the
   **Trades** tab at the top of the tracker screen), kept apart from your storage: "mending" finds every librarian selling it.
@@ -76,8 +78,9 @@ updating, since older versions may not read the newer memory format.
   names come first, then items that only match in their details (enchantments, lore, custom
   names), so `fire` shows Fire Charges before Fire Aspect swords. `/search` and the tally work the
   same way.
-- **"On <your name>".** Your own inventory (and the shulkers and bundles in it) is searched too, listed first,
-  so the sword you're looking for doesn't hide in your inventory.
+- **"On <your name>".** Your own inventory (and the shulkers and bundles in it) is searched too,
+  live and listed first, so the sword you're looking for doesn't hide in your inventory. Your other
+  accounts' inventories follow, as last seen.
 - **Tally.** How many of an item you have across the whole memory: type "totems" or "enchanted
   golden apples" in the search and the line under it says "Totem of Undying: 214 in 12 containers
   · 64 in ender chests · 3 on you". Shulker and bundle contents count; containers that may be gone
