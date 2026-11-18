@@ -2,6 +2,7 @@ package io.github.liangforstudy.entitytracker.gui;
 
 import io.github.liangforstudy.entitytracker.EntityTrackerClient;
 import io.github.liangforstudy.entitytracker.Settings;
+import io.github.liangforstudy.entitytracker.StreamerMode;
 import io.github.liangforstudy.entitytracker.data.BlockRecord;
 import io.github.liangforstudy.entitytracker.data.ContainerRecord;
 import io.github.liangforstudy.entitytracker.data.EntityRecord;
@@ -13,6 +14,7 @@ import io.github.liangforstudy.entitytracker.search.ItemIndex;
 import io.github.liangforstudy.entitytracker.search.ItemQuery;
 import io.github.liangforstudy.entitytracker.search.Tally;
 import io.github.liangforstudy.entitytracker.search.TallyReport;
+import io.github.liangforstudy.entitytracker.search.Terms;
 import io.github.liangforstudy.entitytracker.trace.Tracers;
 import io.github.liangforstudy.entitytracker.track.Trash;
 import org.lwjgl.glfw.GLFW;
@@ -67,6 +69,19 @@ public final class TrackerScreen extends Screen {
     private int tooltipX, tooltipY;
     private ResultList list;
     private boolean showDestroyed = true;
+    /** List order: nearest first (default), or by how old the record is, to re-check stale ones. */
+    private SortMode sort = SortMode.NEAREST;
+    private Button sortButton;
+    /** How many named rows (item name matches) are on screen; detail matches follow them. */
+    private int shownNamed;
+
+    private enum SortMode {
+        NEAREST, OLDEST, NEWEST;
+
+        SortMode next() {
+            return values()[(ordinal() + 1) % values().length];
+        }
+    }
     /** The results shown are close matches, not exact ones. */
     private boolean fuzzy;
     /** How many of the searched item the memory holds, when the search is an item ("totems"). */
@@ -197,6 +212,12 @@ public final class TrackerScreen extends Screen {
             updateBar();
             refresh();
         }).build());
+        sortButton = addRenderableWidget(Button.builder(sortLabel(), b -> {
+            sort = sort.next();
+            b.setMessage(sortLabel());
+            freshList = true;
+            refresh();
+        }).build());
         selectButton = addRenderableWidget(Button.builder(Component.translatable("screen.entitytracker.select"), b -> {
             selectMode = true;
             updateBar();
@@ -258,6 +279,10 @@ public final class TrackerScreen extends Screen {
         return gridView && !trashView;
     }
 
+    private Component sortLabel() {
+        return Component.translatable("screen.entitytracker.sort." + sort.name().toLowerCase(Locale.ROOT));
+    }
+
     private Component destroyedLabel() {
         return Component.translatable(showDestroyed ? "screen.entitytracker.destroyed_shown"
                 : "screen.entitytracker.destroyed_hidden");
@@ -267,7 +292,7 @@ public final class TrackerScreen extends Screen {
     private void updateBar() {
         boolean bulk = selectMode || !selection.isEmpty();
         List<Button> shown = new ArrayList<>();
-        for (Button b : List.of(viewButton, gridButton, destroyedButton, selectButton, doneButton, bulkPrimary, bulkDelete,
+        for (Button b : List.of(viewButton, gridButton, destroyedButton, sortButton, selectButton, doneButton, bulkPrimary, bulkDelete,
                 bulkTrace, tracersButton, selectAllButton, cancelButton)) {
             b.visible = false;
         }
@@ -297,6 +322,7 @@ public final class TrackerScreen extends Screen {
                 shown.add(gridButton);
                 shown.add(destroyedButton);
             }
+            if (!showingGrid()) shown.add(sortButton);
             if (!showingGrid()) shown.add(selectButton); // selecting is for containers, in the list
             if (!trashView && Tracers.count() > 0) {
                 tracersButton.setMessage(Component.translatable("screen.entitytracker.tracers", Tracers.count()));
@@ -577,7 +603,7 @@ public final class TrackerScreen extends Screen {
         if (query.startsWith("@")) query = query.substring(1); // @head:Notch until full filters (4.6)
         fuzzy = false;
         MemoryBank bank = EntityTrackerClient.banks().bank();
-        tallyHint = bank == null || trashView || query.isEmpty() ? null : TallyReport.hint(query, bank);
+        tallyHint = bank == null || trashView || query.isEmpty() ? null : tallyHint(Terms.of(query), bank);
         if (showingGrid()) {
             // The grid needs no search through containers: it comes from the tally.
             job = null;
@@ -586,7 +612,8 @@ public final class TrackerScreen extends Screen {
             refreshGrid();
             return;
         }
-        job = new SearchJob(query, records(), namedItems(query));
+        job = new SearchJob(Terms.of(query), records());
+        shownNamed = 0;
         list.setRows(List.of());
         continueSearch();
     }
@@ -595,7 +622,20 @@ public final class TrackerScreen extends Screen {
      * The items a search names by alias or exact name ("totems", "gapples"), which count as exact
      * matches although their text doesn't contain the words typed.
      */
-    private static Set<Item> namedItems(String query) {
+    /** The tally line for one item, or the lines for several joined ("obby, echest"). */
+    private static @Nullable Component tallyHint(List<String> terms, MemoryBank bank) {
+        if (terms.size() == 1) return TallyReport.hint(terms.get(0), bank);
+        net.minecraft.network.chat.MutableComponent out = null;
+        for (String t : terms) {
+            Component one = TallyReport.hint(t, bank);
+            if (one == null) continue;
+            if (out == null) out = Component.empty().append(one);
+            else out.append(" | ").append(one);
+        }
+        return out;
+    }
+
+    public static Set<Item> namedItems(String query) {
         if (query.isEmpty()) return Set.of();
         ItemQuery.Result result = ItemQuery.resolve(query);
         if (result.kind() != ItemQuery.Kind.ALIAS && result.kind() != ItemQuery.Kind.EXACT) return Set.of();
@@ -620,7 +660,9 @@ public final class TrackerScreen extends Screen {
             return;
         }
         String query = search.getValue().trim().toLowerCase(Locale.ROOT);
-        Set<Item> named = namedItems(query);
+        List<String> terms = query.isEmpty() ? List.of() : Terms.of(query);
+        Set<Item> named = new HashSet<>();
+        for (String t : terms) named.addAll(namedItems(t));
         List<GridCell> cells = new ArrayList<>();
         Tally.of(bank).items.forEach((id, count) -> {
             long shown = count.total + (showDestroyed ? count.maybeGone : 0);
@@ -629,8 +671,10 @@ public final class TrackerScreen extends Screen {
             Item item = parsed == null ? null : BuiltInRegistries.ITEM.getOptional(parsed).orElse(null);
             if (item == null || item == Items.AIR) return;
             ItemStack stack = new ItemStack(item);
-            if (!query.isEmpty() && !named.contains(item)
-                    && !stack.getHoverName().getString().toLowerCase(Locale.ROOT).contains(query)) return;
+            if (!terms.isEmpty() && !named.contains(item)) {
+                String name = stack.getHoverName().getString().toLowerCase(Locale.ROOT);
+                if (terms.stream().noneMatch(name::contains)) return;
+            }
             cells.add(new GridCell(id, stack, shown));
         });
         cells.sort(Comparator.comparingLong(GridCell::shown).reversed()
@@ -703,14 +747,28 @@ public final class TrackerScreen extends Screen {
         if (job == null) return;
         long start = System.nanoTime();
         job.run(start + Settings.searchBudgetNanos);
-        if (!job.exact.isEmpty()) {
+        int named = job.named.size(), found = named + job.detail.size();
+        if (found > 0) {
+            List<Row> rows = new ArrayList<>(found);
+            rows.addAll(job.named);
+            rows.addAll(job.detail);
             if (fuzzy) {
                 // The first exact match: close matches shown so far make way for it.
-                list.setRows(job.exact);
+                list.setRows(rows);
                 fuzzy = false;
-            } else if (job.exact.size() > list.children().size()) {
-                list.addRows(job.exact.subList(list.children().size(), job.exact.size()));
+            } else if (named != shownNamed && list.children().size() > shownNamed) {
+                // A name match turned up after detail matches were shown: it goes above them.
+                double scroll = list.scrollAmount();
+                ResultList.Entry picked = list.getSelected();
+                list.setRows(rows);
+                list.setScrollAmount(scroll);
+                if (picked != null) {
+                    for (ResultList.Entry e : list.children()) if (e.row == picked.row) list.setSelected(e);
+                }
+            } else if (found > list.children().size()) {
+                list.addRows(rows.subList(list.children().size(), found));
             }
+            shownNamed = named;
         } else if (job.close.size() > list.children().size()) {
             list.addRows(job.close.subList(list.children().size(), job.close.size()));
             fuzzy = true;
@@ -763,9 +821,13 @@ public final class TrackerScreen extends Screen {
         if (onMe != null) records.add(onMe);
         Stream<? extends ContainerRecord> shown = trashView ? trashKind.trashed(bank)
                 : bank.containers().filter(r -> !r.isTrashed() && (showDestroyed || r.status != RecordStatus.LIKELY_DESTROYED));
-        records.addAll(shown
-                .sorted(Comparator.comparingDouble(TrackerScreen::sortDistance))
-                .toList());
+        Comparator<ContainerRecord> order = switch (sort) {
+            case NEAREST -> Comparator.comparingDouble(TrackerScreen::sortDistance);
+            // Oldest record first; never seen (no timestamp) last either way.
+            case OLDEST -> Comparator.comparingLong((ContainerRecord r) -> r.lastSeen > 0 ? r.lastSeen : Long.MAX_VALUE);
+            case NEWEST -> Comparator.comparingLong((ContainerRecord r) -> r.lastSeen > 0 ? -r.lastSeen : Long.MAX_VALUE);
+        };
+        records.addAll(shown.sorted(order).toList());
         return records;
     }
 
@@ -777,21 +839,29 @@ public final class TrackerScreen extends Screen {
      * instead of after a second pass over everything.
      */
     private static final class SearchJob {
-        final String query;
-        final String[] queryWords;
-        final Set<Item> namedItems;
+        /** Each term of "obby, echest" is searched on its own (one term for a plain search). */
+        final List<String> terms;
+        final List<String[]> termWords = new ArrayList<>();
+        final Set<Item> namedItems = new HashSet<>();
         final List<ContainerRecord> records;
-        final List<Row> exact = new ArrayList<>();
+        /** Item name matches, listed first. */
+        final List<Row> named = new ArrayList<>();
+        /** Matches only in the details: enchantments, custom names, lore, head owners, book text. */
+        final List<Row> detail = new ArrayList<>();
         final List<Row> close = new ArrayList<>();
         int next;
         /** Where to carry on inside records.get(next) (a big container can take several frames). */
         int nextItem;
         boolean done;
+        final boolean empty;
 
-        SearchJob(String query, List<ContainerRecord> records, Set<Item> namedItems) {
-            this.query = query;
-            this.namedItems = namedItems;
-            this.queryWords = Fuzzy.words(query);
+        SearchJob(List<String> terms, List<ContainerRecord> records) {
+            this.terms = terms;
+            this.empty = terms.size() == 1 && terms.get(0).isEmpty();
+            for (String t : terms) {
+                termWords.add(Fuzzy.words(t));
+                if (!t.isEmpty()) namedItems.addAll(namedItems(t));
+            }
             this.records = records;
         }
 
@@ -803,7 +873,26 @@ public final class TrackerScreen extends Screen {
 
         boolean bookMatches(String text) {
             if (text.isEmpty()) return false;
-            return books.computeIfAbsent(text, t -> t.contains(query));
+            return books.computeIfAbsent(text, t -> terms.stream().anyMatch(t::contains));
+        }
+
+        boolean textMatches(String text) {
+            for (String t : terms) if (text.contains(t)) return true;
+            return false;
+        }
+
+        /** The item's own name (or id in words) holds a term, or a term names it by alias. */
+        boolean nameMatches(ItemIndex.IndexedItem item) {
+            if (namedItems.contains(item.stack().getItem())) return true;
+            String name = item.stack().getHoverName().getString().toLowerCase(Locale.ROOT);
+            String id = BuiltInRegistries.ITEM.getKey(item.stack().getItem()).getPath().replace('_', ' ');
+            for (String t : terms) if (name.contains(t) || id.contains(t)) return true;
+            return false;
+        }
+
+        boolean closeMatches(ItemIndex.IndexedItem item) {
+            for (String[] words : termWords) if (Fuzzy.matches(item.searchText(), item.words(), words)) return true;
+            return false;
         }
 
         /** Containers not looked at yet. */
@@ -811,14 +900,18 @@ public final class TrackerScreen extends Screen {
             return records.size() - next;
         }
 
+        boolean full() {
+            return empty ? named.size() >= MAX_ROWS : named.size() >= MAX_ROWS && detail.size() >= MAX_ROWS;
+        }
+
         void run(long deadline) {
             ItemIndex index = EntityTrackerClient.index();
-            while (next < records.size() && exact.size() < MAX_ROWS) {
+            while (next < records.size() && !full()) {
                 if (System.nanoTime() >= deadline) return;
                 ContainerRecord record = records.get(next);
-                if (query.isEmpty()) {
+                if (empty) {
                     // Top-level stacks from the record itself: opening the screen indexes nothing.
-                    exact.add(new Row(record, null, record.items.size()));
+                    named.add(new Row(record, null, record.items.size()));
                 } else {
                     // Not indexed yet: index it slot by slot within the budget; carry on next frame.
                     List<ItemIndex.IndexedItem> items = record instanceof InventoryRecord
@@ -827,11 +920,12 @@ public final class TrackerScreen extends Screen {
                     for (; nextItem < items.size(); nextItem++) {
                         if ((nextItem & 31) == 31 && System.nanoTime() >= deadline) return;
                         ItemIndex.IndexedItem item = items.get(nextItem);
-                        if (item.searchText().contains(query) || bookMatches(item.bookText())
-                                || namedItems.contains(item.stack().getItem())) {
-                            exact.add(new Row(record, item, 0));
-                        } else if (exact.isEmpty() && close.size() < MAX_ROWS
-                                && Fuzzy.matches(item.searchText(), item.words(), queryWords)) {
+                        if (nameMatches(item)) {
+                            if (named.size() < MAX_ROWS) named.add(new Row(record, item, 0));
+                        } else if (textMatches(item.searchText()) || bookMatches(item.bookText())) {
+                            if (detail.size() < MAX_ROWS) detail.add(new Row(record, item, 0));
+                        } else if (named.isEmpty() && detail.isEmpty() && close.size() < MAX_ROWS
+                                && closeMatches(item)) {
                             close.add(new Row(record, item, 0));
                         }
                     }
@@ -1061,6 +1155,7 @@ public final class TrackerScreen extends Screen {
                     updateBar();
                 } else {
                     String q = search.getValue().trim().toLowerCase(Locale.ROOT);
+                    ContainerHighlight.set(q); // outlined again in the real container
                     if (row.record() instanceof EntityRecord trader && trader.isTrader()) {
                         minecraft.setScreen(new TradeDetailScreen(trader, TrackerScreen.this, ""));
                     } else {
@@ -1081,7 +1176,7 @@ public final class TrackerScreen extends Screen {
     public static String title(ContainerRecord r) {
         String label = label(r);
         // In another dimension the place line already shows "Nether (x, y, z)".
-        if (r instanceof BlockRecord b && !b.global && r.dimension.equals(Dimensions.current())) {
+        if (r instanceof BlockRecord b && !b.global && r.dimension.equals(Dimensions.current()) && !StreamerMode.on()) {
             return Component.translatable("screen.entitytracker.at", label, b.pos.getX(), b.pos.getY(), b.pos.getZ()).getString();
         }
         return label;
@@ -1128,10 +1223,16 @@ public final class TrackerScreen extends Screen {
         String coords = r instanceof BlockRecord b
                 ? b.pos.getX() + ", " + b.pos.getY() + ", " + b.pos.getZ()
                 : Math.round(Math.floor(r.x)) + ", " + Math.round(Math.floor(r.y)) + ", " + Math.round(Math.floor(r.z));
-        boolean showCoords = withCoords;
+        boolean showCoords = withCoords && !StreamerMode.on();
         if (client.player != null && r.dimension.equals(Dimensions.current())) {
             String d = Math.round(Math.sqrt(client.player.distanceToSqr(r.x, r.y, r.z))) + "m";
             return showCoords ? d + " (" + coords + ")" : d;
+        }
+        if (StreamerMode.on()) {
+            // Streamer mode: the dimension and how far, never where.
+            double far = Dimensions.convertedDistance(r);
+            String name = Dimensions.displayName(r.dimension);
+            return Double.isNaN(far) ? name : name + " · " + String.format(Locale.ROOT, "%,d", Math.round(far)) + "m";
         }
         String there = Dimensions.displayName(r.dimension) + " (" + coords + ")";
         double[] here = Dimensions.inCurrent(r);
@@ -1187,6 +1288,10 @@ public final class TrackerScreen extends Screen {
         }
         String coords = withY ? x + " " + y + " " + z : x + " " + z;
         client.keyboardHandler.setClipboard(coords);
+        if (StreamerMode.on()) {
+            Messages.actionBar(Component.translatable("screen.entitytracker.detail.copied_hidden"));
+            return;
+        }
         Messages.actionBar(Component.translatable("screen.entitytracker.detail.copied", coords,
                 Dimensions.displayName(r.dimension)));
     }

@@ -1,6 +1,7 @@
 package io.github.liangforstudy.entitytracker.gui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import io.github.liangforstudy.entitytracker.StreamerMode;
 import io.github.liangforstudy.entitytracker.trace.Tracers;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -34,9 +35,20 @@ public final class OpenTriggers {
         // Unbound too: hides or shows the tracer lines without forgetting them (also a button in the tracker).
         KeyMapping toggleTracers = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.entitytracker.toggle_tracers",
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
+        // A second "open" key, Numpad 5 by default, for keyboards where K is taken.
+        KeyMapping openAlt = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.entitytracker.open_alt",
+                InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_KP_5, category));
+        // Unbound: hides absolute coordinates everywhere (also /etracker streamer).
+        KeyMapping streamer = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.entitytracker.toggle_streamer",
+                InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (toggleTracers.consumeClick()) Tracers.toggle();
-            while (open.consumeClick()) {
+            while (streamer.consumeClick()) {
+                StreamerMode.toggle();
+                Messages.actionBar(Component.translatable(StreamerMode.on()
+                        ? "screen.entitytracker.streamer.on" : "screen.entitytracker.streamer.off"));
+            }
+            while (open.consumeClick() | openAlt.consumeClick()) {
                 if (client.screen == null && client.level != null) client.setScreen(new TrackerScreen());
             }
             while (trades.consumeClick()) {
@@ -44,6 +56,7 @@ public final class OpenTriggers {
             }
         });
 
+        ContainerHighlight.register();
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
             if (!(screen instanceof InventoryScreen) && !(screen instanceof CreativeModeInventoryScreen)) return;
             // Top-right corner of the screen, clear of the inventory and the recipe book.
