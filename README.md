@@ -12,6 +12,21 @@ with, searchable in their own screen.
 > Early development. It works, but expect rough edges and changes to the save format.
 > See the [roadmap](ROADMAP.md) for what's done and what's still to come.
 
+## Download
+
+1. Open the [**Releases**](https://github.com/liangforstudy/Chest_Tracker/releases) page and pick
+   the newest release (the top one).
+2. Under **Assets**, download the jar for your Minecraft version:
+   `entitytracker-<version>+26.2.jar` for 26.2, or `entitytracker-<version>+1.21.11.jar` for
+   1.21.11.
+3. Put it in your instance's `mods` folder, next to [Fabric API](https://modrinth.com/mod/fabric-api).
+   Remove any older `entitytracker-...jar` from that folder first, so only one version is loaded.
+   ([Mod Menu](https://modrinth.com/mod/modmenu) is optional, for the settings screen.)
+
+Releases are test builds for now (marked *Pre-release*). Your memory carries over when you update:
+it lives in `<game dir>/entity-tracker/`, not in the jar. Don't go back to an older version after
+updating, since older versions may not read the newer memory format.
+
 ## Features
 
 - **Entity containers that move.** Entities are remembered by UUID, not position, so a donkey you
@@ -177,7 +192,9 @@ entity the screen belongs to. Server menus and plugin GUIs are ignored.
 
 ## Requirements
 
-- Minecraft **1.21.11**, Fabric Loader, [Fabric API](https://modrinth.com/mod/fabric-api)
+- Minecraft **26.2** or **1.21.11** (one jar each), Fabric Loader,
+  [Fabric API](https://modrinth.com/mod/fabric-api)
+- Optional: [Mod Menu](https://modrinth.com/mod/modmenu) for the settings screen
 - Client only. The server needs nothing installed.
 
 The mod sends no extra packets: it only reads what your client already receives. Some servers have
@@ -191,8 +208,8 @@ Gradle runs on JDK 25 and downloads one if none is installed.
 ./gradlew build
 ```
 
-The jars end up in `versions/<minecraft version>/build/libs/` (1.21.11 and, in progress, 26.2; see
-[PORTING-26.2.md](PORTING-26.2.md)). GitHub builds both on every push and pull request
+The jars end up in `versions/<minecraft version>/build/libs/` (1.21.11 and 26.2; see
+[PORTING-26.2.md](PORTING-26.2.md) for the 26.2 port). GitHub builds both on every push and pull request
 (the **Actions** tab), with the jars attached to each run. The project uses
 [Stonecutter](https://stonecutter.kikugie.dev/) and Mojang's official mappings.
 
@@ -201,13 +218,10 @@ a stress memory) are in [TESTING.md](TESTING.md) and `testing/`.
 
 ## Credits
 
-Inspired by [Chest Tracker](https://modrinth.com/mod/chest-tracker-port); this is a separate mod,
-not affiliated with it.
+- Inspired by [Chest Tracker](https://modrinth.com/mod/chest-tracker-port); this is a separate mod,
+  not affiliated with it.
+- Search ideas inspired by [CSearcher](https://modrinth.com/mod/csearcher).
 
 ## License
 
 [MIT](LICENSE)
-
-## Credits
-
-- Search ideas inspired by [CSearcher](https://modrinth.com/mod/csearcher).
