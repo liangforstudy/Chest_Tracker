@@ -7,6 +7,10 @@ before claiming something works (the README only claims what is tested).
 
 ## Setup
 
+- **Build check without a local build:** every push and pull request is built on GitHub (Actions
+  tab, workflow `Build`), both Minecraft versions, with the jars attached to the run. Useful when
+  your workspace can't reach Gradle or the Maven servers. It only compiles; the tests below need a
+  real game.
 - **Dev client:** `./gradlew :1.21.11:runClient` or `./gradlew :26.2:runClient`. The player is
   `Bluetails_dev` (offline, fixed name so the UUID stays the same); `-PdevUser=<name>` starts a
   second account, for the per-account tests (ender chests, villager prices).

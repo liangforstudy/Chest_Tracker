@@ -1,0 +1,35 @@
+# Builds every Minecraft version on each push and pull request, so a change can be checked without
+# a local build (GitHub's runners can reach Gradle, Fabric's Maven and Maven Central). The jars are
+# attached to the run. This only compiles: the in-game tests in TESTING.md still need a real game.
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1.21.11 compiles with Java 21, 26.2 and Gradle itself with Java 25. The last one listed
+      # becomes JAVA_HOME; both are found by Gradle's toolchains.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            25
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build all versions
+        run: ./gradlew build --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: entitytracker-jars
+          path: versions/*/build/libs/*.jar
+          if-no-files-found: error

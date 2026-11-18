@@ -168,7 +168,8 @@ Gradle runs on JDK 25 and downloads one if none is installed.
 ```
 
 The jars end up in `versions/<minecraft version>/build/libs/` (1.21.11 and, in progress, 26.2; see
-[PORTING-26.2.md](PORTING-26.2.md)). The project uses
+[PORTING-26.2.md](PORTING-26.2.md)). GitHub builds both on every push and pull request
+(the **Actions** tab), with the jars attached to each run. The project uses
 [Stonecutter](https://stonecutter.kikugie.dev/) and Mojang's official mappings.
 
 How it's tested, the test plan with the latest results, and the test setups (datapack, lag proxy,
