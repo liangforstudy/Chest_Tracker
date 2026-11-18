@@ -28,7 +28,7 @@ jobs:
       - name: Build all versions
         run: ./gradlew build --stacktrace
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: entitytracker-jars
           path: versions/*/build/libs/*.jar
