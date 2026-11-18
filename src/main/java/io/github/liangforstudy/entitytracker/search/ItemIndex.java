@@ -217,10 +217,7 @@ public final class ItemIndex {
         String map = mapToken(stack);
         if (map != null) {
             String id = map.substring(5, map.length() - 1);
-            sb.append("
-#").append(id).append("
-map ").append(id).append('
-').append(map);
+            sb.append("\n#").append(id).append("\nmap ").append(id).append('\n').append(map);
         }
         HeadInfo head = HeadInfo.of(stack);
         if (head != null) {
