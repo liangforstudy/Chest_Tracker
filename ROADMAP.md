@@ -55,6 +55,9 @@ as they get built, and get added or removed as plans change. For what works toda
 
 ## Planned
 
+- **Singleplayer world scan:** on joining a singleplayer world, read every container in its save
+  in the background (no radius limit, loot chests nobody opened are skipped), so the whole world
+  is searchable without opening each chest
 - In-world area selection box that works with freecam, and Litematica selections
 - Search filters (`@ench:mending`, `@in:donkey`, `@here`, ...)
 - Tracers, more: colours you can pick, an outline glow on traced animals and minecarts, labels
