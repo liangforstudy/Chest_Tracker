@@ -51,7 +51,12 @@ public final class ContainerHighlight {
             if (active == null || System.currentTimeMillis() > until) return;
             Set<Item> items = named;
             Map<ItemStack, Boolean> cache = new IdentityHashMap<>();
-            ScreenEvents.afterRender(screen).register((s, graphics, mouseX, mouseY, delta) -> {
+            //? if >=26.2 {
+            /*ScreenEvents.afterExtract(screen).register(
+            *///?} else {
+            ScreenEvents.afterRender(screen).register(
+            //?}
+                    (s, graphics, mouseX, mouseY, delta) -> {
                 AbstractContainerScreenAccessor pos = (AbstractContainerScreenAccessor) container;
                 int left = pos.entitytracker$leftPos(), top = pos.entitytracker$topPos();
                 for (Slot slot : container.getMenu().slots) {
