@@ -57,8 +57,20 @@ public final class TradeDetailScreen extends Screen {
         String explain = TrackerScreen.explain("trades.changes");
         if (explain != null) line(explain, 0xFFB0B0B0);
 
+        boolean traced = io.github.liangforstudy.entitytracker.trace.Tracers.isTraced(record);
         List<Button> buttons = List.of(
                 Button.builder(Component.translatable("screen.entitytracker.detail.back"), b -> onClose()).build(),
+                // A line to the villager, followed as it wanders (#14).
+                Button.builder(Component.translatable(traced ? "screen.entitytracker.untrace" : "screen.entitytracker.trace"), b -> {
+                    if (traced) {
+                        io.github.liangforstudy.entitytracker.trace.Tracers.remove(record);
+                        rebuildWidgets();
+                    } else {
+                        io.github.liangforstudy.entitytracker.trace.Tracers.add(List.of(record));
+                        Messages.chat(Component.translatable("screen.entitytracker.tracers.started", TrackerScreen.label(record)));
+                        minecraft.setScreen(null);
+                    }
+                }).build(),
                 Button.builder(Component.translatable("screen.entitytracker.detail.copy_xyz"),
                         b -> TrackerScreen.copyCoords(minecraft, record, true)).build(),
                 Button.builder(Component.translatable("screen.entitytracker.detail.copy_xz"),

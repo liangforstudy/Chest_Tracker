@@ -58,6 +58,9 @@ public final class OpenTriggers {
         KeyMapping openAlt = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.entitytracker.open_alt",
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_KP_5, category));
         // Unbound: hides absolute coordinates everywhere (also /etracker streamer).
+        // Unbound: opens the tracker searching for the item in your hand (map art by id, #15).
+        KeyMapping findHeld = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.entitytracker.find_held",
+                InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
         KeyMapping streamer = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.entitytracker.toggle_streamer",
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -69,6 +72,9 @@ public final class OpenTriggers {
                 StreamerMode.toggle();
                 Messages.actionBar(Component.translatable(StreamerMode.on()
                         ? "screen.entitytracker.streamer.on" : "screen.entitytracker.streamer.off"));
+            }
+            while (findHeld.consumeClick()) {
+                if (client.screen == null && client.level != null) client.setScreen(TrackerScreen.searching("@hand"));
             }
             while (open.consumeClick() | openAlt.consumeClick()) {
                 if (client.screen == null && client.level != null) client.setScreen(new TrackerScreen());

@@ -320,7 +320,7 @@ public final class DebugCommand {
         MemoryBank bank = banks.bank();
         if (bank == null) return fail(source, "No bank open");
         String query = text.trim().toLowerCase(java.util.Locale.ROOT);
-        if (query.startsWith("@")) query = query.substring(1);
+        if (query.startsWith("@") && !io.github.liangforstudy.entitytracker.search.Terms.startsWithHeld(query)) query = query.substring(1);
         var player = Minecraft.getInstance().player;
         var world = Minecraft.getInstance().level;
         String dimension = world == null ? "" : world.dimension().identifier().toString();

@@ -195,5 +195,6 @@
   "screen.entitytracker.sort.nearest": "Sort: Nearest",
   "screen.entitytracker.sort.opened": "Sort: Last opened",
   "screen.entitytracker.sort.oldest": "Sort: Oldest seen",
-  "screen.entitytracker.sort.newest": "Sort: Newest seen"
+  "screen.entitytracker.sort.newest": "Sort: Newest seen",
+  "key.entitytracker.find_held": "Find held item"
 }

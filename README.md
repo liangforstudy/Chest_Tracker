@@ -73,6 +73,9 @@ updating, since older versions may not read the newer memory format.
   (`Donkey "Pack" > Shulker "Tools" > Diamond Pickaxe`). Typos are forgiven: when nothing matches
   exactly, close matches are shown and marked as such ("dimond" finds diamonds). Results appear
   as they're found, nearest first, so on a big base the closest ones show up straight away.
+- **Map art by id, or whatever you're holding.** Search `#12` or `[map 12]` for map 12 exactly, or
+  `@hand` (also in `/search`) for the item in your hand; the **Find held item** key (unbound,
+  set it in Controls) opens the tracker already searching for it.
 - **Several items at once.** Separate them with commas or semicolons: `obby, echest` lists
   obsidian and ender chests together, each term with its own aliases and typo tolerance. Item
   names come first, then items that only match in their details (enchantments, lore, custom

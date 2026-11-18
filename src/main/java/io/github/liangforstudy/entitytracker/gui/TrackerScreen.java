@@ -150,6 +150,16 @@ public final class TrackerScreen extends Screen {
         super(Component.translatable("screen.entitytracker.title"));
     }
 
+    /** Opens the list (not the grid) already searching for {@code query}, e.g. "@hand". */
+    public static TrackerScreen searching(String query) {
+        TrackerScreen screen = new TrackerScreen();
+        screen.initialQuery = query;
+        screen.gridView = false;
+        return screen;
+    }
+
+    private @Nullable String initialQuery;
+
     /** Opens straight into one part of the trash (the Trades screen's Trash button). */
     public static TrackerScreen trash(TrashKind kind) {
         TrackerScreen screen = new TrackerScreen();
@@ -161,7 +171,7 @@ public final class TrackerScreen extends Screen {
     @Override
     protected void init() {
         int fieldWidth = Math.min(300, width - 32);
-        String previous = search != null ? search.getValue() : "";
+        String previous = search != null ? search.getValue() : initialQuery != null ? initialQuery : "";
         search = new EditBox(font, (width - fieldWidth) / 2, 24, fieldWidth, 20,
                 Component.translatable("screen.entitytracker.search"));
         search.setHint(Component.translatable("screen.entitytracker.search"));
@@ -609,7 +619,7 @@ public final class TrackerScreen extends Screen {
             updateBar(); // "Trash (n)" grows with n
         }
         String query = search.getValue().trim().toLowerCase(Locale.ROOT);
-        if (query.startsWith("@")) query = query.substring(1); // @head:Notch until full filters (4.6)
+        if (query.startsWith("@") && !Terms.startsWithHeld(query)) query = query.substring(1); // @head:Notch until full filters (4.6)
         fuzzy = false;
         MemoryBank bank = EntityTrackerClient.banks().bank();
         tallyHint = bank == null || trashView || query.isEmpty() ? null : tallyHint(Terms.of(query), bank);

@@ -201,12 +201,27 @@ public final class ItemIndex {
     }
 
     /** Tooltip lines cover custom name, lore, enchantments and effects; the id covers the rest. */
+    /** "[map 12]" for a filled map with id 12, else null. */
+    public static @Nullable String mapToken(ItemStack stack) {
+        net.minecraft.world.level.saveddata.maps.MapId id = stack.get(DataComponents.MAP_ID);
+        return id == null ? null : "[map " + id.id() + "]";
+    }
+
     private static String searchText(ItemStack stack, Item.TooltipContext context, Minecraft client) {
         StringBuilder sb = new StringBuilder(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
         // The type's own name too, so "shulker box" also finds one renamed "Kit".
         sb.append('\n').append(stack.getItem().getName(stack).getString());
         // Heads: profile name and texture (plus its alias) are searchable even after renaming,
         // as plain words and as head:<name> / headtex:<hash or alias>.
+        // Map art by id: "#12", "map 12" or exactly "[map 12]" (what @hand searches for).
+        String map = mapToken(stack);
+        if (map != null) {
+            String id = map.substring(5, map.length() - 1);
+            sb.append("
+#").append(id).append("
+map ").append(id).append('
+').append(map);
+        }
         HeadInfo head = HeadInfo.of(stack);
         if (head != null) {
             if (head.profileName() != null) sb.append('\n').append(head.profileName()).append("\nhead:").append(head.profileName());

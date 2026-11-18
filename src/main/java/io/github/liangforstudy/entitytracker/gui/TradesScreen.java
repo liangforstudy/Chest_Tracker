@@ -171,11 +171,24 @@ public final class TradesScreen extends Screen {
             Trash.trash(bank, record);
             rebuildWidgets(); // also updates the trash count
         });
+        boolean traced = io.github.liangforstudy.entitytracker.trace.Tracers.isTraced(record);
+        Button.Builder trace = Button.builder(Component.translatable(traced ? "screen.entitytracker.untrace"
+                : "screen.entitytracker.trace"), b -> {
+            closeMenu();
+            if (traced) {
+                io.github.liangforstudy.entitytracker.trace.Tracers.remove(record);
+            } else {
+                io.github.liangforstudy.entitytracker.trace.Tracers.add(List.of(record));
+                Messages.chat(Component.translatable("screen.entitytracker.tracers.started", TrackerScreen.label(record)));
+                minecraft.setScreen(null);
+            }
+        });
         menuW = 120;
-        menuH = 20;
+        menuH = 40;
         menuX = (int) Math.min(x, width - menuW - 4);
         menuY = (int) Math.min(y, height - menuH - 4);
-        menu.add(addRenderableWidget(item.bounds(menuX, menuY, menuW, menuH).build()));
+        menu.add(addRenderableWidget(trace.bounds(menuX, menuY, menuW, 20).build()));
+        menu.add(addRenderableWidget(item.bounds(menuX, menuY + 20, menuW, 20).build()));
     }
 
     private void closeMenu() {
