@@ -162,5 +162,13 @@
   "screen.entitytracker.explain.profession_changed": "This villager now has a different profession than when you last traded, so its offers are different. Trade with it again to update them.",
   "screen.entitytracker.explain.leveled_up": "This villager has levelled up since you last looked, so it has unlocked new offers. Trade with it again to see them.",
   "screen.entitytracker.explain.leaves_by_itself": "Wandering traders only stay for a while, then disappear on their own.",
-  "screen.entitytracker.explain.trades.changes": "Prices and stock as last seen. They change with demand, discounts and restocks, and differ per account."
+  "screen.entitytracker.explain.trades.changes": "Prices and stock as last seen. They change with demand, discounts and restocks, and differ per account.",
+  "key.entitytracker.open_alt": "Open tracker (second key)",
+  "key.entitytracker.toggle_streamer": "Toggle streamer mode",
+  "screen.entitytracker.streamer.on": "Streamer mode on: coordinates hidden, distances only",
+  "screen.entitytracker.streamer.off": "Streamer mode off: coordinates shown",
+  "screen.entitytracker.detail.copied_hidden": "Copied coordinates (hidden: streamer mode)",
+  "screen.entitytracker.sort.nearest": "Sort: Nearest",
+  "screen.entitytracker.sort.oldest": "Sort: Oldest record",
+  "screen.entitytracker.sort.newest": "Sort: Newest record"
 }

@@ -69,6 +69,7 @@ public class EntityTrackerClient implements ClientModInitializer {
         banks = new BankManager(new BankStorage(FabricLoader.getInstance().getGameDir()));
         headAliases = new HeadAliases(FabricLoader.getInstance().getGameDir());
         ItemQuery.loadAliases(banks.storage().root());
+        StreamerMode.load(banks.storage().root());
         interactions = new InteractionTracker();
         PositionTracker positions = new PositionTracker(banks, interactions);
         screens = new ScreenBinder(interactions, banks, positions);

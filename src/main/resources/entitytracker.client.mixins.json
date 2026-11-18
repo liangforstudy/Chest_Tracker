@@ -4,6 +4,7 @@
   "package": "io.github.liangforstudy.entitytracker.mixin.client",
   "compatibilityLevel": "${java}",
   "client": [
+    "AbstractContainerScreenAccessor",
     "ClientPlayerEntityMixin",
     "ClientPlayerInteractionManagerMixin",
     "ClientPlayNetworkHandlerMixin",

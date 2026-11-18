@@ -52,9 +52,10 @@ public final class BankStorage {
     /**
      * 9b9t addresses added to the defaults after the first release. 2b2t.com redirects to 9b9t (the
      * real 2b2t is 2b2t.org, which stays separate); minecraft.9b9t.org is where 9b9t.org points,
-     * and what a launcher's quick-join can connect with.
+     * and what a launcher's quick-join can connect with; eu.9b9t.com is the European entrance to
+     * the same server.
      */
-    private static final List<String> LATER_9B9T = List.of("2b2t.com", "minecraft.9b9t.org");
+    private static final List<String> LATER_9B9T = List.of("2b2t.com", "minecraft.9b9t.org", "eu.9b9t.com");
 
     /** Banks whose file is from a newer version of the mod: opened empty, never saved. */
     private final Set<String> readOnly = ConcurrentHashMap.newKeySet();
@@ -192,7 +193,51 @@ public final class BankStorage {
 
     public record LoadResult(MemoryBank bank, String reason, @Nullable String warning) {}
 
+    /**
+     * Loads the bank for {@code server}, then folds in any bank that was saved under one of its
+     * aliases before that alias joined the group (joining eu.9b9t.com before it was a 9b9t alias
+     * made a separate eu.9b9t.com bank). Records are merged keeping the most recently opened copy;
+     * the alias's file is then renamed (kept, never deleted) so it isn't merged again.
+     */
     public LoadResult load(String server) {
+        LoadResult result = loadOwn(server);
+        String key = keyFor(server);
+        if (readOnly.contains(key)) return result;
+        MemoryBank bank = result.bank();
+        List<String> merged = new ArrayList<>();
+        for (String address : addressesFor(server)) {
+            String aliasKey = keyFor(address);
+            if (aliasKey.equals(key)) continue;
+            Path file = bankFile(aliasKey);
+            if (!Files.exists(file)) continue;
+            try {
+                JsonObject json = parse(file);
+                int format = json.has("formatVersion") ? json.get("formatVersion").getAsInt() : 1;
+                if (format > FORMAT_VERSION) continue; // from a newer mod: leave it for that version
+                MemoryBank other = read(json, key, server, null);
+                checkVersions(other, key, null);
+                for (EntityRecord r : other.all()) bank.mergeEntity(r);
+                for (BlockRecord r : other.allBlocks()) bank.mergeBlock(r);
+                other.accounts.forEach(bank.accounts::putIfAbsent);
+                bank.playDays.addAll(other.playDays);
+                Path kept = file.resolveSibling(aliasKey + ".json.merged-into-" + key + "-"
+                        + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")));
+                Files.move(file, kept);
+                merged.add(address);
+                EntityTrackerClient.LOGGER.info("Merged bank {} into {} (old file kept as {})", file, key, kept.getFileName());
+            } catch (Exception e) {
+                EntityTrackerClient.LOGGER.error("Could not merge alias bank {}; left as it is", file, e);
+            }
+        }
+        if (merged.isEmpty()) return result;
+        bank.markDirty();
+        String note = "Entity Tracker: merged the memory saved under " + String.join(", ", merged)
+                + " into " + server + " (same server). The old file was kept beside it.";
+        return new LoadResult(bank, result.reason() + ", merged alias banks " + merged,
+                result.warning() == null ? note : result.warning() + "\n" + note);
+    }
+
+    private LoadResult loadOwn(String server) {
         String key = keyFor(server);
         Path file = bankFile(key);
         readOnly.remove(key);

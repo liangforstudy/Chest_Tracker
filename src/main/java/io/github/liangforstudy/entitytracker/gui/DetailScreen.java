@@ -373,7 +373,8 @@ public final class DetailScreen extends Screen {
             int sx = gridX + slotX(i);
             int sy = gridY + slotY(i);
             boolean match = !query.isEmpty() && !stack.isEmpty()
-                    && matches.computeIfAbsent(stack, st -> ItemIndex.matchesDeep(st, query, 0));
+                    && matches.computeIfAbsent(stack, st -> io.github.liangforstudy.entitytracker.search.Terms.of(query).stream()
+                            .anyMatch(t -> ItemIndex.matchesDeep(st, t, 0)));
             context.fill(sx, sy, sx + SLOT, sy + SLOT, match ? 0xFFE8B04A : 0xFF373737); // border
             context.fill(sx + 1, sy + 1, sx + SLOT - 1, sy + SLOT - 1, i == hovered || i == selected ? 0xFF9A9A9A : 0xFF8B8B8B);
             if (!stack.isEmpty()) {

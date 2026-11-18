@@ -51,6 +51,18 @@ with, searchable in their own screen.
   what you have most of. Players' words work too (gapple, egap, pearls, xp), and you can add your
   own in `item-aliases.json`. A tally file is written beside the memory for scripts and bots to
   read with the game closed; see [TALLY.md](TALLY.md).
+- **Several items at once.** Separate them with commas or semicolons: `obby, echest` lists
+  obsidian and ender chests together, each term with its own aliases and typo tolerance. Item
+  names come first, then items that only match in their details (enchantments, lore, custom
+  names), so `fire` shows Fire Charges before Fire Aspect swords. `/search` and the tally work the
+  same way.
+- **Sort by record age.** The **Sort** button switches between nearest first, oldest record first
+  (what most needs re-checking) and newest record first.
+- **Found items outlined in the real container.** Pick a search result, then open that container
+  in the world: the items you searched for (and shulkers or bundles holding them) are outlined.
+- **Streamer mode.** `/etracker streamer` (or the **Toggle streamer mode** key) hides absolute
+  coordinates everywhere and shows distances only, so a livestream can't give your base away.
+- **Two open keys.** **K** and **Numpad 5** both open the tracker; rebind either in Controls.
 - **Grid.** The **Grid** button shows everything the memory holds at a glance: one slot per kind
   of item with its total, most first, shulker and bundle contents counted. Typing in the search
   narrows it; tap an item to list where it is.
@@ -111,7 +123,7 @@ with, searchable in their own screen.
   by an older one. Loading, saving and building the search index
   happen in the background, so even a huge base never freezes the game. Several addresses can share
   one memory (`server-aliases.json`); by default `9b9t.com`, `9b9t.org`, `minecraft.9b9t.org` (what
-  a launcher's quick-join may connect with) and `2b2t.com` (which redirects to 9b9t) do. `2b2t.org`,
+  a launcher's quick-join may connect with), `eu.9b9t.com` and `2b2t.com` (which redirects to 9b9t) do. `2b2t.org`,
   the real 2b2t, stays separate.
 - **Works across Minecraft versions.** Every remembered item notes which game version saved it.
   Moving up (1.21.11 to 26.2), older items are upgraded the way the game upgrades worlds. Opening
@@ -182,3 +194,7 @@ not affiliated with it.
 ## License
 
 [MIT](LICENSE)
+
+## Credits
+
+- Search ideas inspired by [CSearcher](https://modrinth.com/mod/csearcher).

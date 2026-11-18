@@ -51,6 +51,12 @@ public final class DebugCommand {
                     OpenTriggers.openLater();
                     return 1;
                 })
+                .then(literal("streamer").executes(ctx -> {
+                    io.github.liangforstudy.entitytracker.StreamerMode.toggle();
+                    ctx.getSource().sendFeedback(Component.translatable(io.github.liangforstudy.entitytracker.StreamerMode.on()
+                            ? "screen.entitytracker.streamer.on" : "screen.entitytracker.streamer.off"));
+                    return 1;
+                }))
                 .then(literal("trades").executes(ctx -> {
                     OpenTriggers.openLater(new io.github.liangforstudy.entitytracker.gui.TradesScreen());
                     return 1;
@@ -169,7 +175,10 @@ public final class DebugCommand {
                 }).then(argument("item", StringArgumentType.greedyString()).executes(ctx -> {
                     MemoryBank bank = banks.bank();
                     if (bank == null) return fail(ctx.getSource(), "No bank open");
-                    TallyReport.lines(StringArgumentType.getString(ctx, "item"), bank).forEach(ctx.getSource()::sendFeedback);
+                    for (String t : io.github.liangforstudy.entitytracker.search.Terms.of(
+                            StringArgumentType.getString(ctx, "item").toLowerCase(java.util.Locale.ROOT))) {
+                        TallyReport.lines(t, bank).forEach(ctx.getSource()::sendFeedback);
+                    }
                     return 1;
                 })))
                 // Testing only (dev client): open a trader's detail view (test tools can't click list rows).
@@ -262,7 +271,7 @@ public final class DebugCommand {
                 ? r.items.stream().map(DebugCommand::stackSummary).collect(Collectors.joining(", "))
                 : "never opened";
         if (r instanceof InventoryRecord) return "- " + TrackerScreen.label(r) + ": " + contents;
-        String place = r instanceof EntityRecord e ? "home chunk " + e.homeChunkX + "," + e.homeChunkZ
+        String place = io.github.liangforstudy.entitytracker.StreamerMode.on() ? "" : r instanceof EntityRecord e ? "home chunk " + e.homeChunkX + "," + e.homeChunkZ
                 : r instanceof BlockRecord b && b.global ? "ender chest"
                 : "at " + ((BlockRecord) r).pos.toShortString()
                         + (((BlockRecord) r).otherPositions.isEmpty() ? "" : " (double)");
@@ -302,15 +311,34 @@ public final class DebugCommand {
             for (ContainerRecord r : records) source.sendFeedback(Component.literal(describe(r)));
             return records.size();
         }
+        List<String> terms = io.github.liangforstudy.entitytracker.search.Terms.of(query);
+        java.util.Map<String, Integer> perTerm = new java.util.LinkedHashMap<>();
+        java.util.Map<String, java.util.Set<net.minecraft.world.item.Item>> named = new java.util.HashMap<>();
+        for (String t : terms) {
+            perTerm.put(t, 0);
+            named.put(t, TrackerScreen.namedItems(t));
+        }
         for (ContainerRecord r : records) {
             for (ItemIndex.IndexedItem item : EntityTrackerClient.index().items(r)) {
-                if (!item.contains(query)) continue;
+                boolean match = false;
+                for (String t : terms) {
+                    if (item.contains(t) || named.get(t).contains(item.stack().getItem())) {
+                        perTerm.merge(t, 1, Integer::sum);
+                        match = true;
+                    }
+                }
+                if (!match) continue;
                 hits++;
                 String path = String.join(" > ", item.path());
                 source.sendFeedback(Component.literal("- " + item.stack().getCount() + "x "
                         + item.stack().getHoverName().getString() + " in " + TrackerScreen.title(r)
                         + (path.isEmpty() ? "" : " > " + path) + "  -  " + TrackerScreen.where(r) + warningSuffix(r)));
             }
+        }
+        if (terms.size() > 1) {
+            perTerm.forEach((t, n) -> {
+                if (n == 0) source.sendFeedback(Component.literal("Nothing found for \"" + t + "\""));
+            });
         }
         source.sendFeedback(Component.literal(hits + " matches for \"" + query + "\""
                 + (radius > 0 ? " within " + radius + " blocks" : "")));

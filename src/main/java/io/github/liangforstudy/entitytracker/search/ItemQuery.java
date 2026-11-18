@@ -68,6 +68,7 @@ public final class ItemQuery {
         alias("minecraft:experience_bottle", "xp", "exp", "xp bottle", "exp bottle", "bottle o enchanting");
         alias("minecraft:end_crystal", "crystal");
         alias("minecraft:obsidian", "obby", "obi");
+        alias("minecraft:ender_chest", "echest", "enderchest", "e chest");
         alias("minecraft:respawn_anchor", "anchor");
         alias("minecraft:firework_rocket", "rocket", "firework");
         alias("minecraft:*shulker_box", "shulker", "shulker box");
