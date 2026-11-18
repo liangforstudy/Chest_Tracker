@@ -53,8 +53,10 @@ public final class ChestTrackerApi {
     }
 
     /**
-     * The same for an entity container (chest minecart, donkey, chest boat...) by its UUID, as
-     * {@code entity.getUUID().toString()}. Null when nothing is recorded for it.
+     * The same for anything clickable that is an entity, by its UUID as
+     * {@code entity.getUUID().toString()}: chest minecarts, donkeys, mules, llamas, chest boats,
+     * item frames, armor stands (their items), and villagers and wandering traders (their offers,
+     * as this account last saw them). Null when nothing is recorded for it.
      */
     public static @Nullable List<String> describeEntity(String uuid) {
         try {
@@ -76,8 +78,9 @@ public final class ChestTrackerApi {
                 ? " (last opened " + TrackerScreen.age(r.lastOpened) + " ago)"
                 : " (never opened)";
         out.add(heading);
-        if (!r.hasSnapshot()) return out;
         DynamicOps<JsonElement> ops = client.level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
+        if (r instanceof EntityRecord e && e.isTrader()) return offers(e, ops, out);
+        if (!r.hasSnapshot()) return out;
         // Same item, same name and enchantments: one line with the total.
         Map<String, Integer> counts = new LinkedHashMap<>();
         for (ContainerRecord.SlotItem slot : r.items) {
@@ -93,6 +96,45 @@ public final class ChestTrackerApi {
         if (counts.isEmpty()) out.add("(empty)");
         counts.forEach((text, n) -> out.add(n + "× " + text));
         return out;
+    }
+
+    /**
+     * A villager's offers, one per line: "24× Emerald + 1× Book → 1× Enchanted Book (Mending)",
+     * with "(out of stock)" or uses left. This account's prices when it has seen them (reputation
+     * and discounts are per player), else whichever account saw them last.
+     */
+    private static List<String> offers(EntityRecord e, DynamicOps<JsonElement> ops, List<String> out) {
+        MemoryBank bank = EntityTrackerClient.banks().bank();
+        io.github.liangforstudy.entitytracker.data.TradeData trades = e.trades;
+        var snap = trades.snapshotFor(bank == null ? null : bank.currentPlayer);
+        if (snap == null) {
+            for (var s : trades.byAccount.values()) if (snap == null || s.time > snap.time) snap = s;
+        }
+        String who = (trades.profession != null ? trades.profession.replace("minecraft:", "") : "trader")
+                + (trades.level > 0 ? ", level " + trades.level : "");
+        out.set(0, TrackerScreen.label(e) + " (" + who + (snap != null ? ", offers seen " + TrackerScreen.age(snap.time) + " ago)" : ", offers never seen)"));
+        if (snap == null) return out;
+        for (var o : snap.offers) {
+            StringBuilder line = new StringBuilder(stackText(ops, o.buy1()));
+            if (o.buy2() != null) {
+                String second = stackText(ops, o.buy2());
+                if (!second.isEmpty()) line.append(" + ").append(second);
+            }
+            line.append(" → ").append(stackText(ops, o.sell()));
+            line.append(o.outOfStock() ? " (out of stock)" : " (" + (o.maxUses() - o.uses()) + " left)");
+            out.add(line.toString());
+        }
+        if (snap.offers.isEmpty()) out.add("(no offers)");
+        return out;
+    }
+
+    private static String stackText(DynamicOps<JsonElement> ops, JsonElement json) {
+        try {
+            ItemStack stack = ItemData.decode(ops, json);
+            return stack.isEmpty() ? "" : stack.getCount() + "× " + describeStack(stack);
+        } catch (RuntimeException ex) {
+            return "?";
+        }
     }
 
     /** "Diamond Pickaxe (Efficiency V)", or the custom name: "\"Kit\" (Shulker Box)". */
