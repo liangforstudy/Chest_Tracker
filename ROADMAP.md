@@ -42,6 +42,11 @@ as they get built, and get added or removed as plans change. For what works toda
 - Chest Tracker importer: `/etracker import` brings Chest Tracker 2.x memory banks over (read-only,
   the original file is never changed; newer memories win). `/etracker import all` merges the files of
   every address of a server, e.g. 9b9t.com, 9b9t.org and 2b2t.com
+- Several items in one search (`obby, echest`), item-name matches listed before detail matches,
+  sorting by last opened or last seen, found items outlined in the real container
+- Streamer mode: coordinates hidden everywhere and kept off the clipboard; a second open key
+  (Numpad 5)
+- Settings screen via Mod Menu (optional), with the streamer settings so far
 
 ## Next
 
@@ -55,7 +60,7 @@ as they get built, and get added or removed as plans change. For what works toda
   that don't overlap when containers are close together, and handing block outlines to highlight
   mods
 - Named groups of containers ("Base 1", "Base 2") with per-group totals
-- Settings screen (via Mod Menu)
+- More in the settings screen: search, staleness and tracer options
 - Testing on servers that use ViaVersion, and on a real modpack instance
 - **Servers with anti-xray.** Many servers hide buried blocks from the client, chests included
   (Paper's anti-xray does when it's turned on): until you come close, a buried chest arrives as

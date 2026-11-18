@@ -17,6 +17,9 @@
   "entrypoints": {
     "client": [
       "io.github.liangforstudy.entitytracker.EntityTrackerClient"
+    ],
+    "modmenu": [
+      "io.github.liangforstudy.entitytracker.gui.ModMenuSettings"
     ]
   },
   "mixins": [

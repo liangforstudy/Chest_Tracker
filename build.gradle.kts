@@ -62,6 +62,8 @@ dependencies {
     modLocalRuntime("maven.modrinth:mcpfabric:${property("deps.mcpfabric")}")
     // Dev client only: other mods to check how we sit alongside them
     modLocalRuntime("maven.modrinth:shulkerboxtooltip:${property("deps.shulkerboxtooltip")}")
+    // Optional: its "configure" button opens our settings screen (ModMenuSettings); never bundled.
+    modCompileOnly("maven.modrinth:modmenu:${property("deps.modmenu")}")
     modLocalRuntime("maven.modrinth:modmenu:${property("deps.modmenu")}")
     modLocalRuntime("maven.modrinth:placeholder-api:${property("deps.placeholder_api")}") // needed by Mod Menu
 }

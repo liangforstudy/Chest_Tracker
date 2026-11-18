@@ -63,9 +63,23 @@ public final class OpenTriggers {
             Screens.getButtons(screen).add(Button.builder(Component.literal("ET"),
                             b -> client.setScreen(new TrackerScreen()))
                     .bounds(width - 26, 6, 20, 20)
-                    .tooltip(Tooltip.create(Component.translatable("screen.entitytracker.open_button")))
+                    .tooltip(Tooltip.create(openTooltip(open, openAlt)))
                     .build());
         });
+    }
+
+    /**
+     * "Open Entity Container Tracker (or press "K" to open it as well)", naming the open keys as
+     * bound right now (built when the inventory opens, so a rebind in Controls shows next time).
+     */
+    private static Component openTooltip(KeyMapping... keys) {
+        java.util.List<Component> bound = new java.util.ArrayList<>();
+        for (KeyMapping k : keys) if (!k.isUnbound()) bound.add(k.getTranslatedKeyMessage());
+        return switch (bound.size()) {
+            case 0 -> Component.translatable("screen.entitytracker.open_button");
+            case 1 -> Component.translatable("screen.entitytracker.open_button.key", bound.get(0));
+            default -> Component.translatable("screen.entitytracker.open_button.keys", bound.get(0), bound.get(1));
+        };
     }
 
     /** For /etracker: the chat screen closes after the command runs, so open on the next tick. */

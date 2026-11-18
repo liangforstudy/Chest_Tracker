@@ -45,6 +45,13 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.lit
 public final class DebugCommand {
     private DebugCommand() {}
 
+    private static int allowClipboard(FabricClientCommandSource source, boolean allow) {
+        io.github.liangforstudy.entitytracker.StreamerMode.setAllowClipboard(allow);
+        source.sendFeedback(Component.translatable(allow ? "screen.entitytracker.streamer.clipboard_on"
+                : "screen.entitytracker.streamer.clipboard_off"));
+        return 1;
+    }
+
     public static void register(CommandDispatcher<FabricClientCommandSource> dispatcher, BankManager banks) {
         dispatcher.register(literal("etracker")
                 .executes(ctx -> {
@@ -56,7 +63,11 @@ public final class DebugCommand {
                     ctx.getSource().sendFeedback(Component.translatable(io.github.liangforstudy.entitytracker.StreamerMode.on()
                             ? "screen.entitytracker.streamer.on" : "screen.entitytracker.streamer.off"));
                     return 1;
-                }))
+                })
+                        // Whether Copy still fills the clipboard in streamer mode. No value: the default, blocked.
+                        .then(literal("allowclipboard").executes(ctx -> allowClipboard(ctx.getSource(), false))
+                                .then(argument("allow", com.mojang.brigadier.arguments.BoolArgumentType.bool()).executes(ctx ->
+                                        allowClipboard(ctx.getSource(), com.mojang.brigadier.arguments.BoolArgumentType.getBool(ctx, "allow"))))))
                 .then(literal("trades").executes(ctx -> {
                     OpenTriggers.openLater(new io.github.liangforstudy.entitytracker.gui.TradesScreen());
                     return 1;

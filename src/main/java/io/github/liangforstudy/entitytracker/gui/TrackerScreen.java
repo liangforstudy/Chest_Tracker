@@ -69,14 +69,19 @@ public final class TrackerScreen extends Screen {
     private int tooltipX, tooltipY;
     private ResultList list;
     private boolean showDestroyed = true;
-    /** List order: nearest first (default), or by how old the record is, to re-check stale ones. */
+    /** The grid has its own switch and starts with destroyed items left out of the counts. */
+    private boolean gridShowDestroyed = false;
+    /**
+     * List order: nearest first (default); opened longest ago first (contents most likely out of
+     * date, to re-check them); or by when the container was last seen, oldest or newest first.
+     */
     private SortMode sort = SortMode.NEAREST;
     private Button sortButton;
     /** How many named rows (item name matches) are on screen; detail matches follow them. */
     private int shownNamed;
 
     private enum SortMode {
-        NEAREST, OLDEST, NEWEST;
+        NEAREST, OPENED, OLDEST, NEWEST;
 
         SortMode next() {
             return values()[(ordinal() + 1) % values().length];
@@ -204,10 +209,12 @@ public final class TrackerScreen extends Screen {
             gridView = !gridView;
             gridScroll = 0;
             b.setMessage(gridLabel());
+            destroyedButton.setMessage(destroyedLabel());
             refresh();
         }).build());
         destroyedButton = addRenderableWidget(Button.builder(destroyedLabel(), b -> {
-            showDestroyed = !showDestroyed;
+            if (showingGrid()) gridShowDestroyed = !gridShowDestroyed;
+            else showDestroyed = !showDestroyed;
             b.setMessage(destroyedLabel());
             updateBar();
             refresh();
@@ -284,7 +291,7 @@ public final class TrackerScreen extends Screen {
     }
 
     private Component destroyedLabel() {
-        return Component.translatable(showDestroyed ? "screen.entitytracker.destroyed_shown"
+        return Component.translatable((showingGrid() ? gridShowDestroyed : showDestroyed) ? "screen.entitytracker.destroyed_shown"
                 : "screen.entitytracker.destroyed_hidden");
     }
 
@@ -550,6 +557,7 @@ public final class TrackerScreen extends Screen {
                 String name = grid.get(pressed).stack().getHoverName().getString();
                 gridView = false;
                 gridButton.setMessage(gridLabel());
+                destroyedButton.setMessage(destroyedLabel());
                 search.setValue(name); // searches the list for it
                 updateBar();
             }
@@ -665,7 +673,7 @@ public final class TrackerScreen extends Screen {
         for (String t : terms) named.addAll(namedItems(t));
         List<GridCell> cells = new ArrayList<>();
         Tally.of(bank).items.forEach((id, count) -> {
-            long shown = count.total + (showDestroyed ? count.maybeGone : 0);
+            long shown = count.total + (gridShowDestroyed ? count.maybeGone : 0);
             if (shown <= 0) return;
             Identifier parsed = Identifier.tryParse(id);
             Item item = parsed == null ? null : BuiltInRegistries.ITEM.getOptional(parsed).orElse(null);
@@ -823,6 +831,8 @@ public final class TrackerScreen extends Screen {
                 : bank.containers().filter(r -> !r.isTrashed() && (showDestroyed || r.status != RecordStatus.LIKELY_DESTROYED));
         Comparator<ContainerRecord> order = switch (sort) {
             case NEAREST -> Comparator.comparingDouble(TrackerScreen::sortDistance);
+            // Opened longest ago first; never opened (nothing to re-check) last.
+            case OPENED -> Comparator.comparingLong((ContainerRecord r) -> r.lastOpened > 0 ? r.lastOpened : Long.MAX_VALUE);
             // Oldest record first; never seen (no timestamp) last either way.
             case OLDEST -> Comparator.comparingLong((ContainerRecord r) -> r.lastSeen > 0 ? r.lastSeen : Long.MAX_VALUE);
             case NEWEST -> Comparator.comparingLong((ContainerRecord r) -> r.lastSeen > 0 ? -r.lastSeen : Long.MAX_VALUE);
@@ -1287,11 +1297,17 @@ public final class TrackerScreen extends Screen {
             z = Math.round(Math.floor(r.z));
         }
         String coords = withY ? x + " " + y + " " + z : x + " " + z;
-        client.keyboardHandler.setClipboard(coords);
         if (StreamerMode.on()) {
-            Messages.actionBar(Component.translatable("screen.entitytracker.detail.copied_hidden"));
+            // Never shown on screen; the clipboard only if the player allows it (they may paste on stream).
+            if (StreamerMode.allowClipboard()) {
+                client.keyboardHandler.setClipboard(coords);
+                Messages.actionBar(Component.translatable("screen.entitytracker.detail.copied_hidden"));
+            } else {
+                Messages.actionBar(Component.translatable("screen.entitytracker.detail.copy_blocked"));
+            }
             return;
         }
+        client.keyboardHandler.setClipboard(coords);
         Messages.actionBar(Component.translatable("screen.entitytracker.detail.copied", coords,
                 Dimensions.displayName(r.dimension)));
     }

@@ -75,6 +75,15 @@ public final class ItemQuery {
         alias("minecraft:*_bed", "bed");
     }
 
+    /**
+     * Default words added after the first release, by the alias-file version that brought them. An
+     * existing item-aliases.json (written once, on first run) gets each batch added once; the file
+     * then records its version, so a word the player deleted isn't put back.
+     */
+    private static final List<List<String>> LATER = List.of(
+            List.of("echest", "enderchest", "e chest")); // version 2
+    private static final String VERSION_KEY = "_defaultsVersion";
+
     private static void alias(String pattern, String... names) {
         for (String name : names) DEFAULTS.put(name, List.of(pattern));
     }
@@ -87,6 +96,7 @@ public final class ItemQuery {
             if (!Files.exists(file)) {
                 Files.createDirectories(dir);
                 JsonObject o = new JsonObject();
+                o.addProperty(VERSION_KEY, LATER.size() + 1);
                 o.addProperty("_about", "Words for the tally (/etracker tally, the tracker's search line, the"
                         + " tally file). Each name maps to item ids; * matches any part of an id. Plurals are"
                         + " handled, so \"totem\" also covers \"totems\".");
@@ -104,6 +114,11 @@ public final class ItemQuery {
             try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
                 o = JsonParser.parseReader(reader).getAsJsonObject();
             }
+            if (addLaterDefaults(o)) {
+                Files.writeString(file, new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(o),
+                        StandardCharsets.UTF_8);
+                modified = Files.getLastModifiedTime(file).toMillis();
+            }
             aliases.clear();
             for (Map.Entry<String, JsonElement> e : o.entrySet()) {
                 if (e.getKey().startsWith("_")) continue;
@@ -119,6 +134,23 @@ public final class ItemQuery {
             aliases.clear();
             DEFAULTS.forEach((name, ids) -> aliases.put(singular(normalize(name)), ids));
         }
+    }
+
+    /** Adds the default words newer than the file's version (missing ones only); true if changed. */
+    private static boolean addLaterDefaults(JsonObject o) {
+        int version = o.has(VERSION_KEY) ? o.get(VERSION_KEY).getAsInt() : 1;
+        if (version > LATER.size()) return false;
+        for (int v = version; v <= LATER.size(); v++) {
+            for (String name : LATER.get(v - 1)) {
+                if (o.has(name)) continue;
+                JsonArray a = new JsonArray();
+                DEFAULTS.get(name).forEach(a::add);
+                o.add(name, a);
+                EntityTrackerClient.LOGGER.info("Added the item alias \"{}\" to item-aliases.json", name);
+            }
+        }
+        o.addProperty(VERSION_KEY, LATER.size() + 1);
+        return true;
     }
 
     /** Re-reads the alias file if it was edited since. */

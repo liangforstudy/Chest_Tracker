@@ -56,16 +56,23 @@ with, searchable in their own screen.
   names come first, then items that only match in their details (enchantments, lore, custom
   names), so `fire` shows Fire Charges before Fire Aspect swords. `/search` and the tally work the
   same way.
-- **Sort by record age.** The **Sort** button switches between nearest first, oldest record first
-  (what most needs re-checking) and newest record first.
+- **Sort by age.** The **Sort** button switches between nearest first, last opened (opened longest
+  ago first: the contents most likely out of date, to re-check), and last seen, oldest or newest
+  first.
 - **Found items outlined in the real container.** Pick a search result, then open that container
   in the world: the items you searched for (and shulkers or bundles holding them) are outlined.
 - **Streamer mode.** `/etracker streamer` (or the **Toggle streamer mode** key) hides absolute
   coordinates everywhere and shows distances only, so a livestream can't give your base away.
+  While it's on, **Copy x y z** and **Copy x z** leave the clipboard alone too (a paste on stream
+  would show them); `/etracker streamer allowclipboard true` lets them copy again, and a bare
+  `/etracker streamer allowclipboard` goes back to blocking.
+- **Settings.** With [Mod Menu](https://modrinth.com/mod/modmenu) installed, the mod's configure
+  button has the streamer settings. Mod Menu is optional: every setting also has a command.
 - **Two open keys.** **K** and **Numpad 5** both open the tracker; rebind either in Controls.
 - **Grid.** The **Grid** button shows everything the memory holds at a glance: one slot per kind
   of item with its total, most first, shulker and bundle contents counted. Typing in the search
-  narrows it; tap an item to list where it is.
+  narrows it; tap an item to list where it is. Items in containers that may be gone are left out
+  of the grid's totals until you press **Destroyed: hidden** to add them.
 - **Tracers.** Pick containers (**Trace** in a row's menu or the detail view, or select several and
   **Trace**) and lines go from your crosshair to each one, through walls, with an outline and a
   label ("Chest · 46 m"). A donkey or minecart near you is followed as it moves; one that isn't
