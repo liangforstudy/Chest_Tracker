@@ -67,10 +67,10 @@ with, searchable in their own screen.
   would show them); `/etracker streamer allowclipboard true` lets them copy again, and a bare
   `/etracker streamer allowclipboard` goes back to blocking.
 - **Settings.** With [Mod Menu](https://modrinth.com/mod/modmenu) installed, the mod's configure
-  button opens its settings: every key of the mod (open tracker K, second key Keypad 5, trades,
-  tracers, streamer mode), each with **Reset** (the same keys as in Controls; Escape unbinds), and
-  **Streamer mode...** with its own page. Mod Menu is optional: keys are in Controls too, and every
-  other setting has a command.
+  button opens its settings: **Keys...** opens Controls > Key Binds at this mod's section (open
+  tracker K, second key Keypad 5, trades, tracers, streamer mode), and **Streamer mode...** has its
+  own page. Mod Menu is optional: the keys are in Controls anyway, and every other setting has a
+  command.
 - **Two open keys.** **K** and **Numpad 5** both open the tracker; rebind either in Controls.
 - **Grid.** The **Grid** button shows everything the memory holds at a glance: one slot per kind
   of item with its total, most first, shulker and bundle contents counted. Typing in the search

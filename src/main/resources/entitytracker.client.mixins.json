@@ -10,6 +10,7 @@
     "ClientPlayNetworkHandlerMixin",
     "GameRendererAccessor",
     "GameRendererMixin",
+    "KeyBindsScreenAccessor",
     "MountScreenHandlerAccessor"
   ],
   "injectors": {

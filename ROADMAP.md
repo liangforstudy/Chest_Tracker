@@ -46,7 +46,7 @@ as they get built, and get added or removed as plans change. For what works toda
   sorting by last opened or last seen, found items outlined in the real container
 - Streamer mode: coordinates hidden everywhere and kept off the clipboard; a second open key
   (Numpad 5)
-- Settings screen via Mod Menu (optional): the mod's keys, rebindable, and a streamer mode page
+- Settings screen via Mod Menu (optional): a button to the mod's keys in Controls, and a streamer mode page
 - `/etracker tracers` (hide, show, clear) besides the Toggle tracers key
 
 ## Next

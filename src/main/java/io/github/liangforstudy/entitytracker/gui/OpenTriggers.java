@@ -28,11 +28,11 @@ import org.lwjgl.glfw.GLFW;
 public final class OpenTriggers {
     private OpenTriggers() {}
 
-    /** The mod's keys in the order the settings screen lists them (filled by register()). */
-    private static final List<KeyMapping> KEYS = new ArrayList<>();
+    /** The mod's section in Controls > Key Binds (the settings screen opens it there). */
+    private static KeyMapping.Category category;
 
-    public static List<KeyMapping> keys() {
-        return KEYS;
+    public static KeyMapping.Category category() {
+        return category;
     }
 
     /**
@@ -45,7 +45,7 @@ public final class OpenTriggers {
     }
 
     public static void register() {
-        KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("entitytracker", "main"));
+        category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("entitytracker", "main"));
         KeyMapping open = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.entitytracker.open",
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_K, category));
         // Unbound by default: the Trades button on the tracker screen is the main way in.
@@ -60,7 +60,6 @@ public final class OpenTriggers {
         // Unbound: hides absolute coordinates everywhere (also /etracker streamer).
         KeyMapping streamer = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.entitytracker.toggle_streamer",
                 InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category));
-        KEYS.addAll(List.of(open, openAlt, trades, toggleTracers, streamer));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (toggleTracers.consumeClick()) {
                 Tracers.toggle();
