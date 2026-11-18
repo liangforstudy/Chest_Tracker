@@ -12,23 +12,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # 1.21.11 compiles with Java 21, 26.2 and Gradle itself with Java 25. The last one listed
       # becomes JAVA_HOME; both are found by Gradle's toolchains.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: |
             21
             25
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
 
       - name: Build all versions
         run: ./gradlew build --stacktrace
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: entitytracker-jars
           path: versions/*/build/libs/*.jar
